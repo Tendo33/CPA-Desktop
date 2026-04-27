@@ -34,7 +34,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -52,17 +52,25 @@ jobs:
             patchelf
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
-      - name: TypeScript check
-        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
 
-      - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Typecheck
+        run: npm run typecheck
 
-      - name: Rust clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-        continue-on-error: true
+      - name: Frontend tests
+        run: npm run test:run
 
       - name: Frontend build
         run: npm run build
+
+      - name: Cargo fmt
+        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+
+      - name: Cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
