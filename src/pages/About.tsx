@@ -14,6 +14,7 @@ import { listen } from '@tauri-apps/api/event'
 import { getVersion } from '@tauri-apps/api/app'
 import { ArrowUpRight } from 'lucide-react'
 import { useT } from '@/lib/i18n'
+import { Button } from '@/components/ui'
 
 export function AboutPage() {
   const { status } = useCpaStore()
@@ -105,14 +106,14 @@ export function AboutPage() {
               {lastPanic.atIso}
             </p>
             <p style={{ fontSize: 12, color: 'var(--c-text-2)' }}>{lastPanic.message}</p>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => openLogsFolder()}
-              className="btn btn-ghost"
-              style={{ alignSelf: 'flex-start', fontSize: 11 }}
+              className="self-start"
             >
               Open log folder
-            </button>
+            </Button>
           </section>
         )}
 
@@ -224,23 +225,19 @@ export function AboutPage() {
           )}
 
           {/* Buttons */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
               onClick={handleCheck}
               disabled={checking || downloading}
-              className="btn btn-ghost"
             >
               {checking ? t.about.checking : t.about.checkUpdates}
-            </button>
+            </Button>
 
             {update?.updateAvailable && !done && (
-              <button
-                onClick={handleUpdate}
-                disabled={downloading}
-                className="btn btn-primary"
-              >
+              <Button onClick={handleUpdate} disabled={downloading}>
                 {downloading ? t.about.downloading(pct) : t.about.updateTo(update.latestVersion)}
-              </button>
+              </Button>
             )}
           </div>
         </div>
