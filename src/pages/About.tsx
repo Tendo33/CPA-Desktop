@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import {
   checkCpaUpdate,
   downloadCpaUpdate,
+  getSettings,
+  openLogsFolder,
   stopCpa,
   startCpa,
+  type LastPanic,
   type UpdateCheckResult,
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
@@ -22,9 +25,13 @@ export function AboutPage() {
   const [progress, setProgress]       = useState<[number, number] | null>(null)
   const [done, setDone]               = useState(false)
   const [error, setError]             = useState('')
+  const [lastPanic, setLastPanic]     = useState<LastPanic | null>(null)
 
   useEffect(() => {
     getVersion().then(setAppVersion).catch(() => setAppVersion('0.1.0'))
+    getSettings()
+      .then((s) => setLastPanic(s.lastPanic ?? null))
+      .catch(() => {})
 
     const unsubs = [
       listen<[number, number]>('cpa:download-progress', (e) => setProgress(e.payload)),
@@ -78,6 +85,36 @@ export function AboutPage() {
       style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '28px 28px' }}
     >
       <div style={{ maxWidth: 460, display: 'flex', flexDirection: 'column', gap: 32 }}>
+
+        {lastPanic && (
+          <section
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              background: 'var(--c-err-bg)',
+              border: '1px solid var(--c-err)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            <h3 style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-err)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Last crash
+            </h3>
+            <p style={{ fontSize: 11, color: 'var(--c-text-3)', fontVariantNumeric: 'tabular-nums' }}>
+              {lastPanic.atIso}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--c-text-2)' }}>{lastPanic.message}</p>
+            <button
+              type="button"
+              onClick={() => openLogsFolder()}
+              className="btn btn-ghost"
+              style={{ alignSelf: 'flex-start', fontSize: 11 }}
+            >
+              Open log folder
+            </button>
+          </section>
+        )}
 
         {/* ── Identity ──────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

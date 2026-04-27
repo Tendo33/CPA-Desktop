@@ -163,6 +163,7 @@ pub fn run() {
             commands::config::get_autolaunch_enabled,
             commands::config::set_autolaunch_enabled,
             commands::diag::report_frontend_error,
+            commands::diag::open_logs_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")

@@ -1,9 +1,16 @@
 import { invoke } from '@tauri-apps/api/core'
 
+export interface LastPanic {
+  atIso: string
+  message: string
+}
+
 export interface AppSettings {
+  schemaVersion?: number
   port: number
   autoStart: boolean
   cpaVersion: string | null
+  lastPanic?: LastPanic | null
 }
 
 export interface UpdateCheckResult {
@@ -55,3 +62,4 @@ export const downloadCpaUpdate = (downloadUrl: string, version: string) =>
 // Diagnostics
 export const reportFrontendError = (message: string, stack?: string) =>
   invoke<void>('report_frontend_error', { message, stack })
+export const openLogsFolder = () => invoke<void>('open_logs_folder')

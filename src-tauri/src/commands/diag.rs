@@ -26,3 +26,11 @@ pub fn report_frontend_error(
     log::error!("frontend error: {message}");
     Ok(())
 }
+
+#[tauri::command]
+pub fn open_logs_folder(app: AppHandle) -> Result<(), String> {
+    let dir = crate::app_config::logs_dir(&app);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
