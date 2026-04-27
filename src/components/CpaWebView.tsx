@@ -106,11 +106,13 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
       const t = setTimeout(() => spawn(url), 150)
       return () => {
         clearTimeout(t)
+        // tokenRef.current is intentionally read at cleanup time to invalidate
+        // any in-flight spawn promise; copying it would defeat that purpose.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         tokenRef.current++
         wvRef.current?.close()
         wvRef.current = null
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url, visible])
 
     // Resize handler
