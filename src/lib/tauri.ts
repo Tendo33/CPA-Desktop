@@ -55,3 +55,7 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
 export const downloadCpaUpdate = (downloadUrl: string, version: string) =>
   invoke<void>('download_cpa_update', { downloadUrl, version })
+
+// Diagnostics
+export const reportFrontendError = (message: string, stack?: string) =>
+  invoke<void>('report_frontend_error', { message, stack })

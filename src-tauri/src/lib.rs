@@ -162,6 +162,7 @@ pub fn run() {
             commands::config::get_port_from_yaml,
             commands::config::get_autolaunch_enabled,
             commands::config::set_autolaunch_enabled,
+            commands::diag::report_frontend_error,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")
