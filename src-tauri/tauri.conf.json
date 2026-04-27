@@ -32,6 +32,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "DeveloperTool",
+    "copyright": "Copyright © 2026 Jinfeng Sun",
+    "shortDescription": "Desktop manager for CLIProxyAPI",
+    "longDescription": "CPA Desktop is a native desktop manager for CLIProxyAPI — auto-download, silent background start, real-time logs, and one-click updates.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -123,18 +123,35 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Sync versions
+        shell: bash
+        run: |
+          node -e "const v=require('./package.json').version; \
+            const f='src-tauri/tauri.conf.json'; \
+            const j=JSON.parse(require('fs').readFileSync(f,'utf8')); \
+            j.version = v; \
+            require('fs').writeFileSync(f, JSON.stringify(j,null,2)+'\n');"
+          node -e "const v=require('./package.json').version; \
+            const fs=require('fs'); const p='src-tauri/Cargo.toml'; \
+            const t=fs.readFileSync(p,'utf8').replace(/^version = .*/m, 'version = \"'+v+'\"'); \
+            fs.writeFileSync(p,t);"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing (optional — set in repo secrets to enable)
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Updater signing (required by tauri-plugin-updater)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing (optional — set in repo secrets to enable; build stays unsigned otherwise)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '' }}
         with:
+          includeUpdaterJson: true
           tagName: ${{ github.ref_name }}
           releaseName: 'CPA Desktop ${{ github.ref_name }}'
           releaseBody: |
