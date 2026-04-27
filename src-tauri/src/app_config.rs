@@ -1,10 +1,18 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
+
+pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+
+fn default_schema_version() -> u32 {
+    SETTINGS_SCHEMA_VERSION
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub port: u16,
     pub auto_start: bool,
     pub cpa_version: Option<String>,
@@ -13,6 +21,7 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            schema_version: SETTINGS_SCHEMA_VERSION,
             port: 8317,
             auto_start: true,
             cpa_version: None,
@@ -50,11 +59,35 @@ pub fn config_yaml_path(app: &tauri::AppHandle) -> PathBuf {
 }
 
 pub fn load_settings(app: &tauri::AppHandle) -> AppSettings {
-    let path = settings_path(app);
-    if let Ok(content) = std::fs::read_to_string(&path) {
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        AppSettings::default()
+    load_settings_at(&settings_path(app))
+}
+
+/// Load settings from a specific path. Quarantines a corrupt file as
+/// `settings.broken.<ts>.json` and returns defaults instead of silently
+/// overwriting the user's config on next save.
+pub fn load_settings_at(path: &Path) -> AppSettings {
+    if !path.exists() {
+        return AppSettings::default();
+    }
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("settings unreadable: {e}; using defaults");
+            return AppSettings::default();
+        }
+    };
+    match serde_json::from_str::<AppSettings>(&raw) {
+        Ok(s) => s,
+        Err(e) => {
+            let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S");
+            let backup = path.with_file_name(format!("settings.broken.{ts}.json"));
+            let _ = std::fs::rename(path, &backup);
+            log::error!(
+                "settings corrupted: {e}; quarantined to {}",
+                backup.display()
+            );
+            AppSettings::default()
+        }
     }
 }
 
