@@ -14,8 +14,8 @@ A cross-platform desktop app for [CLIProxyAPI](https://github.com/router-for-me/
 
 ## Screenshots
 
-| Dashboard | Logs | Settings |
-|---|---|---|
+| Dashboard                                    | Logs                               | Settings                                   |
+| -------------------------------------------- | ---------------------------------- | ------------------------------------------ |
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Logs](docs/screenshots/logs.png) | ![Settings](docs/screenshots/settings.png) |
 
 > Dashboard shows CPA's built-in management panel (`/management.html#/quota`).
@@ -31,17 +31,17 @@ Until v0.2.0 the binaries are unsigned. The first launch will be blocked by Gate
 xattr -cr "/Applications/CPA Desktop.app"
 ```
 
-**Windows** — on the SmartScreen prompt, click *More info* → *Run anyway*.
+**Windows** — on the SmartScreen prompt, click _More info_ → _Run anyway_.
 
 ## Platforms
 
-| Platform | Installer |
-|----------|-----------|
-| Windows x64 | `.msi` / `.exe` |
-| Windows ARM64 | `.msi` / `.exe` |
-| macOS Apple Silicon | `.dmg` |
-| macOS Intel | `.dmg` |
-| Linux x64 | `.AppImage` / `.deb` |
+| Platform            | Installer            |
+| ------------------- | -------------------- |
+| Windows x64         | `.msi` / `.exe`      |
+| Windows ARM64       | `.msi` / `.exe`      |
+| macOS Apple Silicon | `.dmg`               |
+| macOS Intel         | `.dmg`               |
+| Linux x64           | `.AppImage` / `.deb` |
 
 ## Development
 

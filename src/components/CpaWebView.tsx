@@ -1,15 +1,6 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Webview } from '@tauri-apps/api/webview'
-import {
-  getCurrentWindow,
-  LogicalPosition,
-  LogicalSize,
-} from '@tauri-apps/api/window'
+import { getCurrentWindow, LogicalPosition, LogicalSize } from '@tauri-apps/api/window'
 
 export interface CpaWebViewHandle {
   reload: () => void
@@ -66,98 +57,96 @@ async function spawnWebview(url: string): Promise<Webview> {
   })
 }
 
-export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
-  ({ url, visible }, ref) => {
-    const wvRef = useRef<Webview | null>(null)
-    const tokenRef = useRef(0)
-    // Keep a ref so spawn() closure always sees latest visible
-    const visibleRef = useRef(visible)
-    visibleRef.current = visible
+export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(({ url, visible }, ref) => {
+  const wvRef = useRef<Webview | null>(null)
+  const tokenRef = useRef(0)
+  // Keep a ref so spawn() closure always sees latest visible
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
 
-    const spawn = (u: string) => {
-      const token = ++tokenRef.current
-      spawnWebview(u)
-        .then((wv) => {
-          if (tokenRef.current !== token) {
-            wv.close()
-            return
-          }
-          wvRef.current = wv
-          if (visibleRef.current) {
-            wv.show()
-            wv.setFocus().catch(() => {})
-          } else {
-            wv.hide()
-          }
-        })
-        .catch(console.error)
+  const spawn = (u: string) => {
+    const token = ++tokenRef.current
+    spawnWebview(u)
+      .then((wv) => {
+        if (tokenRef.current !== token) {
+          wv.close()
+          return
+        }
+        wvRef.current = wv
+        if (visibleRef.current) {
+          wv.show()
+          wv.setFocus().catch(() => {})
+        } else {
+          wv.hide()
+        }
+      })
+      .catch(console.error)
+  }
+
+  useImperativeHandle(ref, () => ({ reload: () => spawn(url) }))
+
+  // Spawn when url changes while visible, or when visible becomes true.
+  // When visible becomes false, just hide the existing webview.
+  // This ensures the webview always loads a fresh URL when CPA starts running.
+  useEffect(() => {
+    if (!visible) {
+      wvRef.current?.hide()
+      return
     }
-
-    useImperativeHandle(ref, () => ({ reload: () => spawn(url) }))
-
-    // Spawn when url changes while visible, or when visible becomes true.
-    // When visible becomes false, just hide the existing webview.
-    // This ensures the webview always loads a fresh URL when CPA starts running.
-    useEffect(() => {
-      if (!visible) {
-        wvRef.current?.hide()
-        return
-      }
-      const t = setTimeout(() => spawn(url), 150)
-      return () => {
-        clearTimeout(t)
-        // tokenRef.current is intentionally read at cleanup time to invalidate
-        // any in-flight spawn promise; copying it would defeat that purpose.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        tokenRef.current++
-        wvRef.current?.close()
-        wvRef.current = null
-      }
-    }, [url, visible])
-
-    // Resize handler
-    useEffect(() => {
-      const win = getCurrentWindow()
-      let unlisten: (() => void) | null = null
-
-      win
-        .onResized(async () => {
-          const wv = wvRef.current
-          if (!wv) return
-          const { width, height } = await getLogicalSize()
-          await wv.setPosition(new LogicalPosition(SIDEBAR_W, 0))
-          await wv.setSize(new LogicalSize(width, height))
-        })
-        .then((fn) => {
-          unlisten = fn
-        })
-
-      // When window is focused, ensure webview is visible (if it should be)
-      win
-        .onFocusChanged(async ({ payload: focused }) => {
-          if (!focused) return
-          const wv = wvRef.current
-          if (wv && visible) {
-            await wv.show()
-            await wv.setFocus().catch(() => {})
-          }
-        })
-        .then((fn) => {
-          const prev = unlisten
-          unlisten = () => {
-            prev?.()
-            fn()
-          }
-        })
-
-      return () => {
-        unlisten?.()
-      }
+    const t = setTimeout(() => spawn(url), 150)
+    return () => {
+      clearTimeout(t)
+      // tokenRef.current is intentionally read at cleanup time to invalidate
+      // any in-flight spawn promise; copying it would defeat that purpose.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+      tokenRef.current++
+      wvRef.current?.close()
+      wvRef.current = null
+    }
+  }, [url, visible])
 
-    return <div className="w-full h-full" />
-  },
-)
+  // Resize handler
+  useEffect(() => {
+    const win = getCurrentWindow()
+    let unlisten: (() => void) | null = null
+
+    win
+      .onResized(async () => {
+        const wv = wvRef.current
+        if (!wv) return
+        const { width, height } = await getLogicalSize()
+        await wv.setPosition(new LogicalPosition(SIDEBAR_W, 0))
+        await wv.setSize(new LogicalSize(width, height))
+      })
+      .then((fn) => {
+        unlisten = fn
+      })
+
+    // When window is focused, ensure webview is visible (if it should be)
+    win
+      .onFocusChanged(async ({ payload: focused }) => {
+        if (!focused) return
+        const wv = wvRef.current
+        if (wv && visible) {
+          await wv.show()
+          await wv.setFocus().catch(() => {})
+        }
+      })
+      .then((fn) => {
+        const prev = unlisten
+        unlisten = () => {
+          prev?.()
+          fn()
+        }
+      })
+
+    return () => {
+      unlisten?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return <div className="w-full h-full" />
+})
 
 CpaWebView.displayName = 'CpaWebView'

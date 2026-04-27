@@ -16,10 +16,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }): void {
-    reportFrontendError(
-      error.message,
-      error.stack ?? info.componentStack ?? undefined,
-    ).catch(() => {})
+    reportFrontendError(error.message, error.stack ?? info.componentStack ?? undefined).catch(
+      () => {},
+    )
   }
 
   render() {

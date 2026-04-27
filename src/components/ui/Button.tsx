@@ -7,9 +7,11 @@ const button = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-accent-bg text-accent border border-accent-dim hover:brightness-110',
+        primary:
+          'bg-accent-bg text-accent border border-accent-dim hover:bg-accent hover:text-bg hover:border-accent',
         ghost: 'bg-transparent text-text-3 hover:bg-hover hover:text-text-1',
-        danger: 'bg-err-bg text-err border border-err/40 hover:brightness-110',
+        danger:
+          'bg-err-bg text-err border border-err-border hover:bg-err hover:text-white hover:border-err',
       },
       size: {
         sm: 'h-6 px-2 text-[11px]',
@@ -21,8 +23,7 @@ const button = cva(
   },
 )
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
-  VariantProps<typeof button>
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => (

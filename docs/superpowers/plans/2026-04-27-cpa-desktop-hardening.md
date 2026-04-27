@@ -47,6 +47,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 Baseline scan revealed: TS6133/TS5101 (already fixed live), cargo fmt drift in 6 files, 2 clippy warnings in `log_stream.rs`. Lock these down so subsequent tasks start from green.
 
 **Files:**
+
 - Modify: `tsconfig.json` (already done — removed `baseUrl`)
 - Modify: `src/components/Sidebar.tsx` (already done — removed unused `Theme`/`Lang` imports)
 - Modify: `src-tauri/src/log_stream.rs` (clippy fix)
@@ -98,6 +99,7 @@ git commit -m "chore: baseline cleanup (rustfmt, clippy, tsc baseUrl deprecation
 Install testing & linting infrastructure. **No project lints run before this task** — first introduce, then enforce in later tasks.
 
 **Files:**
+
 - Modify: `package.json` (scripts + devDeps)
 - Create: `vitest.config.ts`
 - Create: `eslint.config.mjs`
@@ -183,7 +185,10 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
@@ -269,6 +274,7 @@ git commit -m "build: add Vitest, ESLint flat config, Prettier, lint/test script
 Establish a small, high-signal test baseline. TDD where feasible.
 
 **Files:**
+
 - Create: `src/lib/__tests__/i18n.test.ts`
 - Create: `src/lib/__tests__/utils.test.ts`
 - Create: `src/stores/__tests__/logs.test.ts`
@@ -437,6 +443,7 @@ git commit -m "test: add baseline frontend tests (i18n, utils, stores, statusbar
 ## Task 3: Rust unit tests
 
 **Files:**
+
 - Modify: `src-tauri/src/app_config.rs` (add `#[cfg(test)] mod tests`)
 - Modify: `src-tauri/src/commands/updater.rs` (factor out `asset_name` to be testable; add tests)
 - Modify: `src-tauri/src/cpa_manager.rs` (test `CpaStatus` serde)
@@ -575,6 +582,7 @@ git commit -m "test: add Rust unit tests for app_config, updater asset_name, Cpa
 Spawn a tiny mock CPA (a shell script that prints + sleeps), run it through `cpa_manager::spawn_cpa` / `kill_cpa`, assert behavior.
 
 **Files:**
+
 - Create: `src-tauri/tests/cpa_lifecycle.rs`
 - Create: `src-tauri/tests/fixtures/mock_cpa.sh` (Unix) — Windows variant skipped via `#[cfg]`
 
@@ -648,6 +656,7 @@ git commit -m "test: add integration test for CPA spawn/kill lifecycle"
 Fix the issue where `spawn_health_monitor` keeps looping after CPA stops, and avoid reconstructing `reqwest::Client` per ping.
 
 **Files:**
+
 - Modify: `src-tauri/src/lib.rs`
 
 - [ ] **Step 1: Add a shared HTTP client**
@@ -739,6 +748,7 @@ git commit -m "fix: health monitor exits on Stopped/Idle and reuses reqwest clie
 ## Task 5b: Tray robustness + DRY `start_cpa` + safe async spawn
 
 Three issues found in `tray.rs` review:
+
 - (A) Tooltip detection uses `payload.contains("running")`, which false-positives on `Error("port already running")` etc.
 - (B) `tray_by_id("")` is a hack — pass empty string to find any tray.
 - (C) `tray_start_cpa` duplicates ~60 lines of `commands::cpa::start_cpa`.
@@ -746,6 +756,7 @@ Three issues found in `tray.rs` review:
 Plus a global Rust hardening: `tauri::async_runtime::spawn` swallows panics inside the future. Wrap the spawn pattern.
 
 **Files:**
+
 - Create: `src-tauri/src/cpa_lifecycle.rs`
 - Modify: `src-tauri/src/tray.rs`
 - Modify: `src-tauri/src/commands/cpa.rs`
@@ -985,6 +996,7 @@ git commit -m "refactor: extract cpa_lifecycle, name tray, deserialize status pa
 ## Task 6: Tighten CSP + scoped fs permissions
 
 **Files:**
+
 - Modify: `src-tauri/tauri.conf.json`
 - Modify: `src-tauri/capabilities/default.json`
 
@@ -1042,6 +1054,7 @@ git commit -m "fix: tighten CSP connect-src and scope fs permissions to app data
 ## Task 7: Auto-start CPA on `RunEvent::Ready` instead of fixed sleep
 
 **Files:**
+
 - Modify: `src-tauri/src/lib.rs`
 
 - [ ] **Step 1: Refactor**
@@ -1096,6 +1109,7 @@ git commit -m "refactor: trigger auto-start CPA on RunEvent::Ready"
 ## Task 8: Window state persistence
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/capabilities/default.json`
@@ -1141,6 +1155,7 @@ Today `app_config::load_settings` `unwrap_or_default()` on parse failure, which 
 2. On parse error, rename the broken file to `settings.broken.<ts>.json` and log a warning, instead of silently overwriting on next save.
 
 **Files:**
+
 - Modify: `src-tauri/src/app_config.rs`
 - Modify: `src-tauri/src/commands/settings.rs` (only if struct field list is enumerated)
 - Add test in `src-tauri/tests/app_config_tests.rs`
@@ -1242,6 +1257,7 @@ git commit -m "feat(settings): add schema_version + quarantine corrupted setting
 ## Task 9: Global shortcuts (Cmd/Ctrl+R reload, +, settings, +L logs)
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/capabilities/default.json`
@@ -1286,21 +1302,28 @@ useEffect(() => {
   const bindings: Array<[string, () => void]> = [
     ['CmdOrCtrl+,', () => setPage('settings')],
     ['CmdOrCtrl+L', () => setPage('logs')],
-    ['CmdOrCtrl+R', () => {
-      if (page === 'dashboard') {
-        // CpaWebView reload via ref — exposed in next task; no-op for now
-      }
-    }],
+    [
+      'CmdOrCtrl+R',
+      () => {
+        if (page === 'dashboard') {
+          // CpaWebView reload via ref — exposed in next task; no-op for now
+        }
+      },
+    ],
   ]
   ;(async () => {
     for (const [key, fn] of bindings) {
-      try { await register(key, fn) } catch {}
+      try {
+        await register(key, fn)
+      } catch {}
       if (cancelled) return
     }
   })()
   return () => {
     cancelled = true
-    bindings.forEach(([key]) => { unregister(key).catch(() => {}) })
+    bindings.forEach(([key]) => {
+      unregister(key).catch(() => {})
+    })
   }
 }, [binaryReady, page])
 ```
@@ -1322,6 +1345,7 @@ git commit -m "feat: global shortcuts for settings/logs (Cmd/Ctrl+, and Cmd/Ctrl
 Two CPA Desktop processes started simultaneously will both bind the tray, both spawn cpa.exe, and corrupt settings on save. Use `tauri-plugin-single-instance` to forward args to the existing instance and focus its window.
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/capabilities/default.json` (no change needed — plugin needs no perms)
@@ -1364,6 +1388,7 @@ git commit -m "feat: single-instance lock; forward focus to existing window"
 ## Task 10: Tray menu additions
 
 **Files:**
+
 - Modify: `src-tauri/src/tray.rs`
 
 - [ ] **Step 1: Read current tray.rs and add two menu items**
@@ -1406,6 +1431,7 @@ git commit -m "feat: tray menu — open log folder, check for updates"
 ## Task 11: Rust panic hook + log directory + rotation
 
 **Files:**
+
 - Modify: `src-tauri/src/app_config.rs` (add `logs_dir` helper + `last_panic` field)
 - Create: `src-tauri/src/panic_log.rs`
 - Modify: `src-tauri/src/lib.rs` (install hook in `run()` first line)
@@ -1534,6 +1560,7 @@ Replace the ad-hoc `app.log` writer (currently sprinkled across `lib.rs`, `cpa_m
 Also: `8087` is hard-coded in 4 places. Hoist it to `pub const DEFAULT_PORT: u16 = 8087;` in `app_config.rs`.
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/src/app_config.rs` (add `DEFAULT_PORT`)
@@ -1587,6 +1614,7 @@ git commit -m "refactor: tauri-plugin-log for structured rotated logs; hoist DEF
 ## Task 12: Frontend ErrorBoundary + `report_frontend_error` command
 
 **Files:**
+
 - Create: `src/components/ErrorBoundary.tsx`
 - Modify: `src/main.tsx` (wrap `<App/>`)
 - Modify: `src-tauri/src/commands/mod.rs` + new `src-tauri/src/commands/diag.rs`
@@ -1643,8 +1671,12 @@ export async function reportFrontendError(message: string, stack?: string) {
 import { Component, type ReactNode } from 'react'
 import { reportFrontendError } from '@/lib/tauri'
 
-interface Props { children: ReactNode }
-interface State { error: Error | null }
+interface Props {
+  children: ReactNode
+}
+interface State {
+  error: Error | null
+}
 
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
@@ -1654,21 +1686,43 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string }): void {
-    reportFrontendError(error.message, error.stack ?? info.componentStack ?? undefined).catch(() => {})
+    reportFrontendError(error.message, error.stack ?? info.componentStack ?? undefined).catch(
+      () => {},
+    )
   }
 
   render() {
     if (this.state.error) {
       return (
-        <div style={{
-          padding: 24, height: '100vh', display: 'flex',
-          flexDirection: 'column', gap: 12, background: 'var(--c-bg)', color: 'var(--c-text-1)',
-        }}>
+        <div
+          style={{
+            padding: 24,
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            background: 'var(--c-bg)',
+            color: 'var(--c-text-1)',
+          }}
+        >
           <h2 style={{ fontSize: 16, fontWeight: 600 }}>Something went wrong.</h2>
-          <pre className="selectable" style={{
-            fontSize: 12, color: 'var(--c-err)', whiteSpace: 'pre-wrap',
-            padding: 12, background: 'var(--c-err-bg)', borderRadius: 6, maxHeight: '60vh', overflow: 'auto',
-          }}>{this.state.error.message}{'\n'}{this.state.error.stack}</pre>
+          <pre
+            className="selectable"
+            style={{
+              fontSize: 12,
+              color: 'var(--c-err)',
+              whiteSpace: 'pre-wrap',
+              padding: 12,
+              background: 'var(--c-err-bg)',
+              borderRadius: 6,
+              maxHeight: '60vh',
+              overflow: 'auto',
+            }}
+          >
+            {this.state.error.message}
+            {'\n'}
+            {this.state.error.stack}
+          </pre>
           <button className="btn btn-primary" onClick={() => this.setState({ error: null })}>
             Dismiss
           </button>
@@ -1687,7 +1741,7 @@ In `src/main.tsx`:
 ```tsx
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 // ...
-<React.StrictMode>
+;<React.StrictMode>
   <ErrorBoundary>
     <App />
   </ErrorBoundary>
@@ -1716,6 +1770,7 @@ Today the frontend uses the loose `CpaStatus = 'Idle' | 'Stopped' | 'Starting' |
 Switch to `#[serde(tag = "kind", content = "data")]` on Rust and a typed union + helper guards on the frontend.
 
 **Files:**
+
 - Modify: `src-tauri/src/cpa_manager.rs`
 - Modify: `src/types/cpa.ts` (new)
 - Modify: `src/lib/cpaStatus.ts` (new — guards)
@@ -1780,6 +1835,7 @@ git commit -m "refactor: CpaStatus as tagged union end-to-end; remove string-mat
 ## Task 13: About page — show "last panic" if present
 
 **Files:**
+
 - Modify: `src/pages/About.tsx`
 - Modify: `src/lib/tauri.ts` (load settings already returns `last_panic`)
 
@@ -1788,7 +1844,10 @@ git commit -m "refactor: CpaStatus as tagged union end-to-end; remove string-mat
 Extend `AppSettings` type in `src/lib/tauri.ts`:
 
 ```ts
-export interface LastPanic { atIso: string; message: string }
+export interface LastPanic {
+  atIso: string
+  message: string
+}
 export interface AppSettings {
   port: number
   autoStart: boolean
@@ -1803,16 +1862,20 @@ export interface AppSettings {
 In `About.tsx` add a section near the top (only if `lastPanic`):
 
 ```tsx
-{lastPanic && (
-  <section className="card" style={{ borderColor: 'var(--c-err)', padding: 12 }}>
-    <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-err)', marginBottom: 4 }}>
-      Last crash
-    </h3>
-    <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{lastPanic.atIso}</p>
-    <p style={{ fontSize: 12, color: 'var(--c-text-2)', marginTop: 4 }}>{lastPanic.message}</p>
-    <button className="btn btn-ghost" onClick={() => openLogsFolder()}>Open log folder</button>
-  </section>
-)}
+{
+  lastPanic && (
+    <section className="card" style={{ borderColor: 'var(--c-err)', padding: 12 }}>
+      <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-err)', marginBottom: 4 }}>
+        Last crash
+      </h3>
+      <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{lastPanic.atIso}</p>
+      <p style={{ fontSize: 12, color: 'var(--c-text-2)', marginTop: 4 }}>{lastPanic.message}</p>
+      <button className="btn btn-ghost" onClick={() => openLogsFolder()}>
+        Open log folder
+      </button>
+    </section>
+  )
+}
 ```
 
 - [ ] **Step 2: Add `openLogsFolder` Rust command**
@@ -1845,6 +1908,7 @@ git commit -m "feat: surface last panic on About page + open logs folder"
 ## Task 14: Tauri self-updater plugin
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `package.json`
 - Modify: `src-tauri/src/lib.rs`
@@ -1860,6 +1924,7 @@ npx tauri signer generate -w ~/.tauri/cpa-desktop.key
 This produces `~/.tauri/cpa-desktop.key` (private) and `~/.tauri/cpa-desktop.key.pub` (public). The CLI prints the public key string — copy it.
 
 > Add the **private** key contents and password to GitHub repository secrets:
+>
 > - `TAURI_SIGNING_PRIVATE_KEY` (the file contents, multi-line)
 > - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the passphrase you chose)
 
@@ -1921,6 +1986,7 @@ git commit -m "feat: integrate tauri-plugin-updater + plugin-process"
 ## Task 15: Auto-check app updates UI
 
 **Files:**
+
 - Modify: `src/lib/tauri.ts` (add updater wrappers)
 - Modify: `src/pages/Settings.tsx`
 - Modify: `src/stores/settings.ts` (add `autoCheckAppUpdates: bool`)
@@ -1977,14 +2043,19 @@ const onCheckUpdate = async () => {
   setUpdateMsg('Checking…')
   try {
     const u = await checkAppUpdate()
-    if (!u) { setUpdateMsg('Up to date'); return }
+    if (!u) {
+      setUpdateMsg('Up to date')
+      return
+    }
     if (confirm(`Update ${u.version} available. Install now?`)) {
       setUpdateMsg('Downloading…')
       await applyAppUpdate(u)
     } else {
       setUpdateMsg(`v${u.version} available`)
     }
-  } catch (e) { setUpdateMsg(String(e)) }
+  } catch (e) {
+    setUpdateMsg(String(e))
+  }
 }
 ```
 
@@ -1996,17 +2067,21 @@ In `App.tsx` add:
 useEffect(() => {
   const settings = useSettingsStore.getState()
   if (!settings.autoCheckAppUpdates) return
-  const tid = setTimeout(async () => {
-    try {
-      const u = await checkAppUpdate()
-      if (u) {
-        // surface a toast/notification (minimal: console + window event)
-        const notif = await import('@tauri-apps/plugin-notification')
-        const granted = await notif.isPermissionGranted()
-        if (granted) notif.sendNotification({ title: 'CPA Desktop update available', body: `v${u.version}` })
-      }
-    } catch {}
-  }, 6 * 60 * 60 * 1000)
+  const tid = setTimeout(
+    async () => {
+      try {
+        const u = await checkAppUpdate()
+        if (u) {
+          // surface a toast/notification (minimal: console + window event)
+          const notif = await import('@tauri-apps/plugin-notification')
+          const granted = await notif.isPermissionGranted()
+          if (granted)
+            notif.sendNotification({ title: 'CPA Desktop update available', body: `v${u.version}` })
+        }
+      } catch {}
+    },
+    6 * 60 * 60 * 1000,
+  )
   return () => clearTimeout(tid)
 }, [])
 ```
@@ -2028,6 +2103,7 @@ git commit -m "feat: app self-update via plugin-updater + auto-check toggle"
 ## Task 16: Port conflict detection + suggest +1
 
 **Files:**
+
 - Modify: `src-tauri/src/cpa_manager.rs` or wherever spawn errors propagate (check `commands/cpa.rs::start_cpa`)
 - Modify: `src/pages/Dashboard.tsx` (UI prompt) or a small toast util
 
@@ -2040,16 +2116,21 @@ When CPA stderr contains `address already in use`, set `CpaStatus::Error(format!
 In `Dashboard.tsx` error overlay, when error matches `/^port_in_use:(\d+)/`:
 
 ```tsx
-{portInUseMatch && (
-  <button className="btn btn-primary" onClick={async () => {
-    const next = Number(portInUseMatch[1]) + 1
-    await saveSettings({ ...settings, port: next })
-    await writeConfigYamlPort(next)
-    await startCpa()
-  }}>
-    Try port {Number(portInUseMatch[1]) + 1}
-  </button>
-)}
+{
+  portInUseMatch && (
+    <button
+      className="btn btn-primary"
+      onClick={async () => {
+        const next = Number(portInUseMatch[1]) + 1
+        await saveSettings({ ...settings, port: next })
+        await writeConfigYamlPort(next)
+        await startCpa()
+      }}
+    >
+      Try port {Number(portInUseMatch[1]) + 1}
+    </button>
+  )
+}
 ```
 
 > Add `writeConfigYamlPort(n)` Rust command that updates only the `port:` line via `serde_yaml`. Reuse Task 30's helper if landed; otherwise add a stub.
@@ -2068,6 +2149,7 @@ git commit -m "feat: detect port conflict and offer one-click +1"
 ## Task 17: README screenshots + LICENSE consistency
 
 **Files:**
+
 - Modify: `README.md`
 - Possibly modify: `LICENSE` and/or `tauri.conf.json` (if license needs to change)
 - Add: `docs/screenshots/dashboard.png`, `logs.png`, `settings.png`
@@ -2087,14 +2169,14 @@ Replace the `## Screenshots` section:
 ```markdown
 ## Screenshots
 
-| Dashboard | Logs | Settings |
-|---|---|---|
+| Dashboard                           | Logs                           | Settings                           |
+| ----------------------------------- | ------------------------------ | ---------------------------------- |
 | ![](docs/screenshots/dashboard.png) | ![](docs/screenshots/logs.png) | ![](docs/screenshots/settings.png) |
 ```
 
 Add an "Unsigned builds" note for macOS/Windows (Phase 2 doesn't sign):
 
-```markdown
+````markdown
 ## Unsigned builds
 
 Until 0.2.0 the binaries are unsigned. On macOS, run once:
@@ -2102,22 +2184,25 @@ Until 0.2.0 the binaries are unsigned. On macOS, run once:
 ```sh
 xattr -cr "/Applications/CPA Desktop.app"
 ```
+````
 
 On Windows, click "More info" → "Run anyway" on the SmartScreen prompt.
-```
+
+````
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add README.md docs/screenshots LICENSE
 git commit -m "docs: add screenshots, document unsigned-build workaround"
-```
+````
 
 ---
 
 ## Task 18: CI hardening (`ci.yml`)
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Replace `ci.yml` body**
@@ -2215,6 +2300,7 @@ git commit -m "ci: enforce lint/test/fmt/clippy on all platforms"
 ## Task 19: Release CI updater wiring (`release.yml`)
 
 **Files:**
+
 - Modify: `.github/workflows/release.yml`
 
 - [ ] **Step 1: Inject signing env + updater JSON**
@@ -2273,6 +2359,7 @@ git push --follow-tags
 - [ ] **Step 4: Smoke-test the published artifact**
 
 Download from GitHub Releases, install on macOS or Linux, verify:
+
 1. App launches
 2. Settings → Check for updates → returns "Up to date"
 3. Kill `cli-proxy-api` externally → UI shows error within 8s
@@ -2289,6 +2376,7 @@ Phase 2 complete.
 ## Task 21: Design tokens → Tailwind v4 `@theme`
 
 **Files:**
+
 - Modify: `src/index.css`
 
 - [ ] **Step 1: Mirror CSS vars into Tailwind theme**
@@ -2296,7 +2384,7 @@ Phase 2 complete.
 Tailwind v4 supports CSS-first config. In `src/index.css` after the `:root` token block, add:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-bg: var(--c-bg);
@@ -2338,6 +2426,7 @@ git commit -m "style: expose CSS color tokens to Tailwind v4 @theme"
 ## Task 22: Build base UI components
 
 **Files:**
+
 - Create: `src/components/ui/index.ts`
 - Create: `src/components/ui/Button.tsx`
 - Create: `src/components/ui/Input.tsx`
@@ -2366,8 +2455,8 @@ const button = cva(
     variants: {
       variant: {
         primary: 'bg-accent-bg text-accent border border-accent-dim hover:bg-accent/15',
-        ghost:   'bg-transparent text-text-3 hover:bg-hover hover:text-text-1',
-        danger:  'bg-err-bg text-err border border-err/40 hover:bg-err/15',
+        ghost: 'bg-transparent text-text-3 hover:bg-hover hover:text-text-1',
+        danger: 'bg-err-bg text-err border border-err/40 hover:bg-err/15',
       },
       size: {
         sm: 'h-6 px-2 text-[11px]',
@@ -2426,6 +2515,7 @@ git commit -m "feat(ui): add base components — Button, Input, Toggle, Card, Se
 Replace inline-styled `Toggle` / `Section` / `Row` in `src/pages/Settings.tsx` with imports from `@/components/ui`. Behavior unchanged.
 
 **Files:**
+
 - Modify: `src/pages/Settings.tsx`
 
 - [ ] **Step 1: Replace local definitions with imports**
@@ -2445,6 +2535,7 @@ git commit -m "refactor(settings): use shared UI components"
 ## Task 24: Migrate Logs page + add virtual list
 
 **Files:**
+
 - Modify: `package.json` (add `@tanstack/react-virtual`)
 - Modify: `src/components/LogList.tsx`
 - Modify: `src/pages/Logs.tsx`
@@ -2462,7 +2553,10 @@ import { useRef, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { LogLine } from '@/stores/logs'
 
-interface Props { lines: LogLine[]; autoScroll: boolean }
+interface Props {
+  lines: LogLine[]
+  autoScroll: boolean
+}
 
 export function LogList({ lines, autoScroll }: Props) {
   const parentRef = useRef<HTMLDivElement>(null)
@@ -2487,11 +2581,17 @@ export function LogList({ lines, autoScroll }: Props) {
             <div
               key={item.key}
               style={{
-                position: 'absolute', top: 0, left: 0, width: '100%',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
                 transform: `translateY(${item.start}px)`,
-                height: item.size, padding: '0 12px',
+                height: item.size,
+                padding: '0 12px',
                 color: l.level === 'stderr' ? 'var(--c-err)' : 'var(--c-text-2)',
-                fontSize: 11, lineHeight: '18px', whiteSpace: 'pre',
+                fontSize: 11,
+                lineHeight: '18px',
+                whiteSpace: 'pre',
               }}
             >
               {l.text}
@@ -2521,6 +2621,7 @@ git commit -m "feat(logs): virtualize log list and add export-to-file"
 ## Task 25: Dashboard — webview toolbar + reload-on-error retry
 
 **Files:**
+
 - Modify: `src/pages/Dashboard.tsx`
 - Modify: `src/components/CpaWebView.tsx` (expose `back/forward/zoom`)
 
@@ -2545,12 +2646,22 @@ In Dashboard, render a 28px-tall toolbar above the webview area (only when runni
 
 ```tsx
 <div className="dashboard-toolbar">
-  <Button size="sm" variant="ghost" onClick={() => wv.current?.back()}>←</Button>
-  <Button size="sm" variant="ghost" onClick={() => wv.current?.forward()}>→</Button>
-  <Button size="sm" variant="ghost" onClick={() => wv.current?.reload()}>⟳</Button>
+  <Button size="sm" variant="ghost" onClick={() => wv.current?.back()}>
+    ←
+  </Button>
+  <Button size="sm" variant="ghost" onClick={() => wv.current?.forward()}>
+    →
+  </Button>
+  <Button size="sm" variant="ghost" onClick={() => wv.current?.reload()}>
+    ⟳
+  </Button>
   <span className="text-text-3 text-[11px] tabular-nums">{managementUrl}</span>
-  <Button size="sm" variant="ghost" onClick={() => wv.current?.copyUrl()}>Copy</Button>
-  <Button size="sm" variant="ghost" onClick={() => wv.current?.openExternal()}>↗</Button>
+  <Button size="sm" variant="ghost" onClick={() => wv.current?.copyUrl()}>
+    Copy
+  </Button>
+  <Button size="sm" variant="ghost" onClick={() => wv.current?.openExternal()}>
+    ↗
+  </Button>
 </div>
 ```
 
@@ -2585,6 +2696,7 @@ git commit -m "refactor: migrate About and FirstRunSetup to shared UI"
 ## Task 27: `theme: 'system'`
 
 **Files:**
+
 - Modify: `src/stores/settings.ts`
 - Modify: `src/App.tsx`
 
@@ -2607,7 +2719,9 @@ useEffect(() => {
   }
   apply()
   const mql = window.matchMedia('(prefers-color-scheme: dark)')
-  const onChange = () => { if (theme === 'system') apply() }
+  const onChange = () => {
+    if (theme === 'system') apply()
+  }
   mql.addEventListener('change', onChange)
   return () => mql.removeEventListener('change', onChange)
 }, [theme])
@@ -2630,6 +2744,7 @@ git commit -m "feat: theme: 'system' option that follows OS"
 ## Task 28: a11y polish
 
 **Files:**
+
 - Modify: `src/index.css` (focus-visible)
 - Modify: `src/components/Sidebar.tsx` (arrow key nav, aria-labels)
 - Modify: status-dot rendering sites (aria-label)
@@ -2671,6 +2786,7 @@ git commit -m "a11y: focus-visible, aria-labels, keyboard nav for sidebar"
 ## Task 29: i18n locales restructure + ICU
 
 **Files:**
+
 - Move: `src/lib/i18n.ts` → `src/locales/zh.ts` + `src/locales/en.ts` + `src/locales/index.ts`
 - Modify: any consumer (`useT()` should keep working)
 - Add devDep: `intl-messageformat`
@@ -2737,6 +2853,7 @@ git commit -m "refactor(i18n): split locales into per-language files; add ICU pl
 ## Task 30: Config editor — backup + Rust-side YAML validation
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/config.rs` — `write_config_yaml` validates + backs up
 - Add: helpers in `app_config.rs`
 
@@ -2811,6 +2928,7 @@ git commit -m "feat(config): validate YAML on save and keep last 10 backups"
 ## Task 31: Config editor — Form view (5 fields)
 
 **Files:**
+
 - Modify: `src/pages/Settings.tsx` — add Form/YAML tabs
 - Add: `src/components/ConfigForm.tsx`
 - Add: Rust commands `read_config_field` / `write_config_field` (path-style YAML mutation)
@@ -2868,6 +2986,7 @@ git commit -m "feat(config): form view for top 5 fields with path-based YAML mut
 ## Task 32: YAML view with Monaco editor (lazy)
 
 **Files:**
+
 - Modify: `package.json` (`@monaco-editor/react`, `monaco-editor`)
 - Modify: `src/pages/Settings.tsx`
 
@@ -2909,6 +3028,7 @@ git commit -m "feat(config): lazy-loaded Monaco YAML editor"
 ## Task 33: FirstRunSetup — mirror sources + resume
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/updater.rs` (`download_cpa_update` accepts a list of mirrors and uses HTTP Range)
 - Modify: `src/components/FirstRunSetup.tsx` (UI for mirror selection)
 
@@ -2981,7 +3101,9 @@ Step 1 of Task 22 introduces `Toast`. Add:
 
 ```tsx
 // src/components/ui/Toaster.tsx
-export function Toaster() { /* portal-mounts queue from useToastStore */ }
+export function Toaster() {
+  /* portal-mounts queue from useToastStore */
+}
 ```
 
 Mount once in `App.tsx` so any feature can call `toast.success(...)` / `toast.error(...)` without rendering its own container. Use it in Tasks 14 (download progress), 15 (update toast), 16 (port conflict resolution), 30 (backup created).

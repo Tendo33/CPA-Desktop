@@ -20,9 +20,7 @@ export const useCpaStore = create<CpaStore>((set) => ({
   initialize: async () => {
     const [status, port] = await Promise.all([getCpaStatus(), getCpaPort()])
     set({ status, port, initialized: true })
-    const unlisten = await listen<CpaStatus>('cpa:status', (e) =>
-      set({ status: e.payload }),
-    )
+    const unlisten = await listen<CpaStatus>('cpa:status', (e) => set({ status: e.payload }))
     return unlisten
   },
 }))

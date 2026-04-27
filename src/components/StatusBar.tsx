@@ -8,40 +8,42 @@ import { dotClass, statusColor } from '@/components/statusbar.helpers'
 export function StatusBar() {
   const { status, port } = useCpaStore()
   const t = useT()
-  const running  = isRunning(status)
+  const running = isRunning(status)
   const starting = isStarting(status)
   const errorMsg = errorOf(status)
 
   function statusText(s: CpaStatus): string {
     switch (s.kind) {
-      case 'Running':  return t.status.running
-      case 'Starting': return t.status.starting
-      case 'Stopped':  return t.status.stopped
-      case 'Idle':     return t.status.notStarted
-      case 'Error':    return t.status.error
+      case 'Running':
+        return t.status.running
+      case 'Starting':
+        return t.status.starting
+      case 'Stopped':
+        return t.status.stopped
+      case 'Idle':
+        return t.status.notStarted
+      case 'Error':
+        return t.status.error
     }
   }
 
   return (
     <div
       style={{
-        height: 26,
-        background: 'var(--c-surface)',
-        borderTop: '1px solid var(--c-border-sub)',
+        height: 32,
+        background: errorMsg ? 'var(--c-err-bg)' : 'var(--c-surface)',
+        borderTop: `1px solid ${errorMsg ? 'var(--c-err-border)' : 'var(--c-border-sub)'}`,
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '0 12px',
+        gap: 12,
+        padding: '0 14px',
         flexShrink: 0,
+        transition: 'background 240ms ease, border-color 240ms ease',
       }}
     >
       {/* Status pill */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <span
-          className={dotClass(status)}
-          role="status"
-          aria-label={statusText(status)}
-        />
+        <span className={dotClass(status)} role="status" aria-label={statusText(status)} />
         <span
           style={{
             fontSize: 11,
@@ -113,12 +115,13 @@ export function StatusBar() {
         onMouseEnter={(e) => {
           if (starting) return
           if (running) {
-            e.currentTarget.style.background = 'var(--c-err-bg)'
-            e.currentTarget.style.borderColor = 'oklch(28% 0.07 22)'
-            e.currentTarget.style.color = 'var(--c-err)'
+            e.currentTarget.style.background = 'var(--c-err)'
+            e.currentTarget.style.borderColor = 'var(--c-err)'
+            e.currentTarget.style.color = 'white'
           } else {
-            e.currentTarget.style.background = 'oklch(20% 0.045 58)'
+            e.currentTarget.style.background = 'var(--c-accent)'
             e.currentTarget.style.borderColor = 'var(--c-accent)'
+            e.currentTarget.style.color = 'var(--c-bg)'
           }
         }}
         onMouseLeave={(e) => {

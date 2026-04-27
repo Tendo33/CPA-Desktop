@@ -67,9 +67,7 @@ export function ConfigForm() {
   }
 
   if (!loaded) {
-    return (
-      <div className="text-xs text-text-3 px-3 py-4">Loading…</div>
-    )
+    return <div className="text-xs text-text-3 px-3 py-4">Loading…</div>
   }
 
   return (

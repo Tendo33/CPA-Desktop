@@ -13,6 +13,7 @@
 CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eNkru/cpa-ui](https://github.com/eNkru/cpa-ui)：自管理 CPA 二进制、进程托管、健康监控、日志流、`config.yaml` 编辑、托盘、自启动、i18n、主题切换、CPA 一键热更新。
 
 但距离"能稳定向公众分发"仍有缺口，集中在三类：
+
 1. **发布工程**：无前端单测/lint/format；CI 仅做 typecheck + cargo check + clippy（且 clippy `continue-on-error`）；App 自身没有自更新；签名/公证流程未跑通。
 2. **健壮性 & 可观测**：health monitor 死循环逻辑、CSP/fs scope 过宽、panic 无落盘、窗口大小未持久化、缺全局快捷键。
 3. **前端工程**：组件全是行内 style，Tailwind v4 未真正使用；YAML 编辑器是裸 textarea，无校验/无备份；日志列表非虚拟列表，>5k 行会卡。
@@ -26,6 +27,7 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 ### 2.1 测试与质量基线
 
 **前端**
+
 - 工具链：`vitest` + `@testing-library/react` + `jsdom` + `@vitest/coverage-v8`；`eslint@9` flat config（`@typescript-eslint`、`react-hooks`、`react-refresh`）；`prettier`；`.editorconfig`。
 - 首批测试目标（最小高 ROI 集合）：
   - `lib/i18n.ts` — key 完备性（`zh.keys() === en.keys()`）、复数函数。
@@ -36,6 +38,7 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 - **不引入覆盖率门槛**（首版避免堵车），仅 CI 打印报告。
 
 **Rust**
+
 - `cargo fmt --check`、`cargo clippy -- -D warnings`（移除 CI `continue-on-error`，先把现存 warnings 清零）。
 - 新增单元测试：
   - `app_config::read_port_from_yaml` — 多种输入（缺 key、错类型、注释）。
@@ -45,14 +48,14 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 
 ### 2.2 健壮性补强（Rust）
 
-| 文件 | 问题 | 修复 |
-|---|---|---|
-| `lib.rs::spawn_health_monitor` | 状态非 Running 时 `continue`，monitor 永不退出 | 重构：传入 `cancel: Arc<AtomicBool>`，stop/exit 时置位；非 Running 用 `tokio::time::sleep` 长休并周期性检查 cancel；Stopped/Idle 时直接 return |
-| `lib.rs::http_ping` | 每次 ping 新建 `reqwest::Client` | 用 `OnceLock<reqwest::Client>` 共享，启动时构造一次 |
-| `updater.rs::download_cpa_update` | 全文件读入 `Vec<u8>`；无完整性校验；失败无回滚 | 仍用内存（CPA 二进制 ≤80MB，可接受）；下载完成后比较 `downloaded == content_length`，失败则恢复 `cli-proxy-api.exe.old` |
-| `tauri.conf.json::security.csp` | `connect-src` 含 `https://*` | 收紧为 `'self' http://localhost:* https://api.github.com https://github.com https://objects.githubusercontent.com https://*.githubusercontent.com` |
-| `capabilities/default.json` | `fs:allow-app-{read,write}-recursive` 范围广 | 在 Tauri v2 fs scope 中限定到 `$APPDATA/cpa-desktop/**`；移除全 app 递归 |
-| `lib.rs` setup auto_start | 用 `sleep 800ms` 后启动 | 改为监听 `tauri::RunEvent::Ready` 后再 spawn |
+| 文件                              | 问题                                           | 修复                                                                                                                                               |
+| --------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib.rs::spawn_health_monitor`    | 状态非 Running 时 `continue`，monitor 永不退出 | 重构：传入 `cancel: Arc<AtomicBool>`，stop/exit 时置位；非 Running 用 `tokio::time::sleep` 长休并周期性检查 cancel；Stopped/Idle 时直接 return     |
+| `lib.rs::http_ping`               | 每次 ping 新建 `reqwest::Client`               | 用 `OnceLock<reqwest::Client>` 共享，启动时构造一次                                                                                                |
+| `updater.rs::download_cpa_update` | 全文件读入 `Vec<u8>`；无完整性校验；失败无回滚 | 仍用内存（CPA 二进制 ≤80MB，可接受）；下载完成后比较 `downloaded == content_length`，失败则恢复 `cli-proxy-api.exe.old`                            |
+| `tauri.conf.json::security.csp`   | `connect-src` 含 `https://*`                   | 收紧为 `'self' http://localhost:* https://api.github.com https://github.com https://objects.githubusercontent.com https://*.githubusercontent.com` |
+| `capabilities/default.json`       | `fs:allow-app-{read,write}-recursive` 范围广   | 在 Tauri v2 fs scope 中限定到 `$APPDATA/cpa-desktop/**`；移除全 app 递归                                                                           |
+| `lib.rs` setup auto_start         | 用 `sleep 800ms` 后启动                        | 改为监听 `tauri::RunEvent::Ready` 后再 spawn                                                                                                       |
 
 ### 2.3 可观测 / Crash 上报（仅本地，不外发）
 
@@ -88,19 +91,20 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 
 ### 2.5 用户感知的小修复
 
-| 项 | 实现 |
-|---|---|
-| 窗口大小/位置持久化 | `tauri-plugin-window-state` |
+| 项                           | 实现                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 窗口大小/位置持久化          | `tauri-plugin-window-state`                                                                                   |
 | 全局快捷键（仅窗口 focused） | `tauri-plugin-global-shortcut`：`Cmd/Ctrl+R` 刷新嵌入 webview、`Cmd/Ctrl+,` 跳 Settings、`Cmd/Ctrl+L` 跳 Logs |
-| 托盘菜单补充 | 在 `tray.rs` 现有项基础上加 "Open Log Folder"、"Check for App Updates" |
-| README screenshots | 补 3 张（Dashboard/Logs/Settings），1280×800 |
-| LICENSE 一致性 | 确认 LICENSE 文件实际为 MIT，与 README 对齐；若改变需同步 `tauri.conf.json` |
-| 数据目录命名 | 沿用 `cpa-desktop` 字符串，但抽到 `app_config::APP_DIR_NAME` 常量 |
-| 端口冲突提示 | 启动失败错误中检测 `port already in use` → 弹"端口 X 被占用，是否换 X+1？" |
+| 托盘菜单补充                 | 在 `tray.rs` 现有项基础上加 "Open Log Folder"、"Check for App Updates"                                        |
+| README screenshots           | 补 3 张（Dashboard/Logs/Settings），1280×800                                                                  |
+| LICENSE 一致性               | 确认 LICENSE 文件实际为 MIT，与 README 对齐；若改变需同步 `tauri.conf.json`                                   |
+| 数据目录命名                 | 沿用 `cpa-desktop` 字符串，但抽到 `app_config::APP_DIR_NAME` 常量                                             |
+| 端口冲突提示                 | 启动失败错误中检测 `port already in use` → 弹"端口 X 被占用，是否换 X+1？"                                    |
 
 ### 2.6 CI 流水线增强
 
 **`ci.yml`** 新增步骤：
+
 ```
 - npm run lint
 - npm run typecheck
@@ -111,6 +115,7 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 ```
 
 **`release.yml`** 改动：
+
 - 注入 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 - `tauri-action` `with.includeUpdaterJson: true`。
 - macOS 签名 secret 用 `if: ${{ secrets.APPLE_CERTIFICATE != '' }}` 守卫，未配置时仍出未签名包但不阻塞。
@@ -148,6 +153,7 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
   - `request_timeout_seconds`（NumberInput）
 
   其它字段仍通过 YAML 视图编辑。Form 字段通过 `serde_yaml::Value` 路径读写而非整文件覆写，避免破坏注释。
+
 - **YAML 视图**：`Monaco editor` 懒加载（仅切到该 tab 时加载），带行号、YAML 语法高亮、错误下划线。
 - **校验**：保存前 Rust 端 `serde_yaml::from_str::<serde_yaml::Value>(&new)` 失败则不写盘；前端展示行号 + 红框。
 - **自动备份**：每次成功保存前把旧文件复制到 `data_dir/backups/config.yaml.<ISO timestamp>`，FIFO 保留最近 10 份；UI 提供"Restore from..."下拉。
@@ -187,27 +193,27 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 
 ## 4. 风险与对策
 
-| 风险 | 概率 | 影响 | 对策 |
-|---|---|---|---|
-| Tauri updater 公钥 + 未签名包在 macOS 被 Gatekeeper 拦 | 高 | 用户首次需 `xattr -cr` | README 加专章 + 后续补签名 |
-| Monaco editor 体积大（~3MB gzip） | 中 | 安装包变大 | 懒加载到 YAML tab，仅按需下载 |
-| `fs` scope 收紧后历史路径访问失败 | 中 | 启动报错 | 灰度：先并存（旧 + 新 scope），1 个版本后移除旧 |
-| clippy `-D warnings` 现存 warnings 数量未知 | 中 | 工时膨胀 | Phase 2 第一天先跑一次 baseline，超过 30 个就分 PR 修 |
-| 全局快捷键与系统冲突 | 低 | 用户困扰 | 仅在窗口 focused 时启用，且都是常规组合 |
-| 自动备份目录无限增长 | 低 | 占空间 | FIFO 上限 10 份 |
+| 风险                                                   | 概率 | 影响                   | 对策                                                  |
+| ------------------------------------------------------ | ---- | ---------------------- | ----------------------------------------------------- |
+| Tauri updater 公钥 + 未签名包在 macOS 被 Gatekeeper 拦 | 高   | 用户首次需 `xattr -cr` | README 加专章 + 后续补签名                            |
+| Monaco editor 体积大（~3MB gzip）                      | 中   | 安装包变大             | 懒加载到 YAML tab，仅按需下载                         |
+| `fs` scope 收紧后历史路径访问失败                      | 中   | 启动报错               | 灰度：先并存（旧 + 新 scope），1 个版本后移除旧       |
+| clippy `-D warnings` 现存 warnings 数量未知            | 中   | 工时膨胀               | Phase 2 第一天先跑一次 baseline，超过 30 个就分 PR 修 |
+| 全局快捷键与系统冲突                                   | 低   | 用户困扰               | 仅在窗口 focused 时启用，且都是常规组合               |
+| 自动备份目录无限增长                                   | 低   | 占空间                 | FIFO 上限 10 份                                       |
 
 ---
 
 ## 5. 工作量与时间线
 
-| 周 | 内容 |
-|---|---|
-| W1 | §2.1 测试 lint + §2.2 健壮性 |
-| W2 | §2.3 crash + §2.4 自更新（含密钥流） |
-| W3 | §2.5 小修复 + §2.6 CI + §2.7 验收 → **v0.1.x release** |
-| W4 | §3.1 设计系统 + §3.3 体验小修复 |
-| W5 | §3.2 配置编辑器（重头） |
-| W6 | §3.4–3.6 + Phase 3 验收 → **v0.2.0 release** |
+| 周  | 内容                                                   |
+| --- | ------------------------------------------------------ |
+| W1  | §2.1 测试 lint + §2.2 健壮性                           |
+| W2  | §2.3 crash + §2.4 自更新（含密钥流）                   |
+| W3  | §2.5 小修复 + §2.6 CI + §2.7 验收 → **v0.1.x release** |
+| W4  | §3.1 设计系统 + §3.3 体验小修复                        |
+| W5  | §3.2 配置编辑器（重头）                                |
+| W6  | §3.4–3.6 + Phase 3 验收 → **v0.2.0 release**           |
 
 总计 ≈ 6 周（个人节奏，含调试缓冲）。
 
@@ -227,6 +233,7 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 - 三平台（windows-latest / macos-latest / ubuntu-22.04）矩阵均 pass
 
 **任务执行原则**：
+
 1. 每完成一个子任务前，本地必须先跑过等价命令（前端 + Rust 全套）；不绿不提交。
 2. 引入新 lint/test 规则时，**必须先把现存违规清零再开启 `-D warnings` / 阻断模式**，避免引入即红。
 3. 如果某项检查暂时无法满足（例如 clippy 有合理误报），用最小作用域 `#[allow(...)]` 或 `eslint-disable-next-line` 加注释说明，**不允许全局禁用规则**。

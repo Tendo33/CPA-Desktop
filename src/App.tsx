@@ -12,12 +12,13 @@ import { useLogStore } from '@/stores/logs'
 import { useSettingsStore } from '@/stores/settings'
 import { applyAppUpdate, checkAppUpdate, cpaBinaryExists, getSettings } from '@/lib/tauri'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
 
 export default function App() {
-  const [page, setPage]               = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>('dashboard')
   const [binaryReady, setBinaryReady] = useState<boolean | null>(null)
-  const [, setPrevPage]               = useState<Page>('dashboard')
+  const [, setPrevPage] = useState<Page>('dashboard')
 
   const { initialize: initCpa } = useCpaStore()
   const { initialize: initLogs } = useLogStore()
@@ -34,7 +35,9 @@ export default function App() {
     }
     apply()
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => { if (theme === 'system') apply() }
+    const onChange = () => {
+      if (theme === 'system') apply()
+    }
     mql.addEventListener('change', onChange)
     return () => mql.removeEventListener('change', onChange)
   }, [theme])
@@ -90,23 +93,26 @@ export default function App() {
     let timer: ReturnType<typeof setTimeout> | null = null
     void getSettings().then(async (s) => {
       if (cancelled || !s.autoCheckAppUpdates) return
-      timer = setTimeout(async () => {
-        try {
-          const u = await checkAppUpdate()
-          if (u) {
-            const notif = await import('@tauri-apps/plugin-notification')
-            const granted = await notif.isPermissionGranted()
-            if (granted) {
-              await notif.sendNotification({
-                title: 'CPA Desktop update available',
-                body: `v${u.version}`,
-              })
+      timer = setTimeout(
+        async () => {
+          try {
+            const u = await checkAppUpdate()
+            if (u) {
+              const notif = await import('@tauri-apps/plugin-notification')
+              const granted = await notif.isPermissionGranted()
+              if (granted) {
+                await notif.sendNotification({
+                  title: 'CPA Desktop update available',
+                  body: `v${u.version}`,
+                })
+              }
             }
+          } catch {
+            /* swallow */
           }
-        } catch {
-          /* swallow */
-        }
-      }, 6 * 60 * 60 * 1000)
+        },
+        6 * 60 * 60 * 1000,
+      )
     })
     return () => {
       cancelled = true
@@ -137,17 +143,25 @@ export default function App() {
 
   if (binaryReady === null) {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', background: 'var(--c-bg)',
-      }}>
-        <div style={{
-          width: 18, height: 18,
-          border: '1.5px solid var(--c-border)',
-          borderTopColor: 'var(--c-accent)',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: 'var(--c-bg)',
+        }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            border: '1.5px solid var(--c-border)',
+            borderTopColor: 'var(--c-accent)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }}
+        />
       </div>
     )
   }
@@ -157,28 +171,45 @@ export default function App() {
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      height: '100vh',
-      background: 'var(--c-bg)',
-      overflow: 'hidden',
-    }}>
-      <Sidebar current={page} onChange={handlePageChange} />
+    <MotionConfig reducedMotion="user">
+      <div
+        style={{
+          display: 'flex',
+          height: '100vh',
+          background: 'var(--c-bg)',
+          overflow: 'hidden',
+        }}
+      >
+        <Sidebar current={page} onChange={handlePageChange} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <main
-          key={page}
-          className="page-fade"
-          style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
         >
-          {page === 'dashboard' && <Dashboard />}
-          {page === 'logs'      && <Logs />}
-          {page === 'settings'  && <SettingsPage />}
-          {page === 'about'     && <AboutPage />}
-        </main>
-        <StatusBar />
+          <AnimatePresence mode="wait">
+            <motion.main
+              key={page}
+              initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            >
+              {page === 'dashboard' && <Dashboard />}
+              {page === 'logs' && <Logs />}
+              {page === 'settings' && <SettingsPage />}
+              {page === 'about' && <AboutPage />}
+            </motion.main>
+          </AnimatePresence>
+          <StatusBar />
+        </div>
+        <Toaster />
       </div>
-      <Toaster />
-    </div>
+    </MotionConfig>
   )
 }

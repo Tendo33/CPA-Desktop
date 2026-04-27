@@ -17,7 +17,7 @@ import {
 import { useCpaStore } from '@/stores/cpa'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-import { Button, Input, NumberInput, Row, Section, Toggle } from '@/components/ui'
+import { Button, Input, NumberInput, Row, Section, Toggle, Tabs } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
@@ -31,10 +31,9 @@ export function SettingsPage() {
   const { status } = useCpaStore()
   const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [yaml, setYaml]         = useState('')
-  const [saving, setSaving]     = useState(false)
+  const [yaml, setYaml] = useState('')
   const [yamlError, setYamlError] = useState('')
-  const [msg, setMsg]           = useState('')
+  const [msg, setMsg] = useState('')
   const [autolaunch, setAutolaunch] = useState(false)
   const [yamlPort, setYamlPort] = useState<number | null>(null)
   const [updateMsg, setUpdateMsg] = useState('')
@@ -43,9 +42,15 @@ export function SettingsPage() {
 
   useEffect(() => {
     getSettings().then(setSettings)
-    readConfigYaml().then(setYaml).catch(() => {})
-    getAutolaunchEnabled().then(setAutolaunch).catch(() => {})
-    getPortFromYaml().then(setYamlPort).catch(() => {})
+    readConfigYaml()
+      .then(setYaml)
+      .catch(() => {})
+    getAutolaunchEnabled()
+      .then(setAutolaunch)
+      .catch(() => {})
+    getPortFromYaml()
+      .then(setYamlPort)
+      .catch(() => {})
   }, [])
 
   const flash = (m: string) => {
@@ -63,28 +68,25 @@ export function SettingsPage() {
     }
   }
 
-  const handleSaveSettings = async () => {
+  const updateSetting = async (updates: Partial<AppSettings>) => {
     if (!settings) return
-    setSaving(true)
+    const next = { ...settings, ...updates }
+    setSettings(next)
     try {
-      await saveSettings(settings)
-      flash(t.settings.savedMsg)
+      await saveSettings(next)
     } catch (e) {
       flash(String(e))
     }
-    setSaving(false)
   }
 
   const handleSaveYaml = async () => {
     setYamlError('')
-    setSaving(true)
     try {
       await writeConfigYaml(yaml)
       flash(t.settings.configSaved)
     } catch (e) {
       setYamlError(String(e))
     }
-    setSaving(false)
   }
 
   const onCheckUpdate = async () => {
@@ -113,7 +115,16 @@ export function SettingsPage() {
 
   if (!settings) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--c-text-3)', fontSize: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          color: 'var(--c-text-3)',
+          fontSize: 12,
+        }}
+      >
         {t.settings.loading}
       </div>
     )
@@ -127,19 +138,24 @@ export function SettingsPage() {
       style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
     >
       <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
-
         {/* ── Application ─────────────────────────────────────────── */}
         <Section title={t.settings.application}>
-          <Row first label={t.settings.cpaPort} hint={portMismatch ? t.settings.portMismatch(yamlPort!) : t.settings.portHint}>
+          <Row
+            first
+            label={t.settings.cpaPort}
+            hint={portMismatch ? t.settings.portMismatch(yamlPort!) : t.settings.portHint}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {portMismatch && (
-                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>{t.settings.mismatch}</span>
+                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>
+                  {t.settings.mismatch}
+                </span>
               )}
               <NumberInput
                 value={settings.port}
                 min={1024}
                 max={65535}
-                onChange={(n) => setSettings({ ...settings, port: n })}
+                onChange={(n) => updateSetting({ port: n })}
               />
             </div>
           </Row>
@@ -147,7 +163,7 @@ export function SettingsPage() {
           <Row label={t.settings.autoStartCpa} hint={t.settings.autoStartHint}>
             <Toggle
               checked={settings.autoStart}
-              onChange={(v) => setSettings({ ...settings, autoStart: v })}
+              onChange={(v) => updateSetting({ autoStart: v })}
             />
           </Row>
 
@@ -156,25 +172,23 @@ export function SettingsPage() {
           </Row>
 
           <Row label="Check for app updates" hint={updateMsg || 'Tauri self-updater'}>
-            <Button variant="ghost" size="sm" onClick={onCheckUpdate}>Check now</Button>
+            <Button variant="ghost" size="sm" onClick={onCheckUpdate}>
+              Check now
+            </Button>
           </Row>
 
           <Row label="Auto-check on launch" hint="Once every 6 hours">
             <Toggle
               checked={settings.autoCheckAppUpdates ?? false}
-              onChange={(v) => setSettings({ ...settings, autoCheckAppUpdates: v })}
+              onChange={(v) => updateSetting({ autoCheckAppUpdates: v })}
             />
           </Row>
 
-          <Row
-            label="Download mirrors"
-            hint="Comma-separated host list, tried in order"
-          >
+          <Row label="Download mirrors" hint="Comma-separated host list, tried in order">
             <Input
               value={(settings.mirrors ?? []).join(', ')}
               onChange={(e) =>
-                setSettings({
-                  ...settings,
+                updateSetting({
                   mirrors: e.target.value
                     .split(',')
                     .map((s) => s.trim())
@@ -188,9 +202,6 @@ export function SettingsPage() {
 
         {/* ── Actions ─────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={handleSaveSettings} disabled={saving}>
-            {saving ? t.settings.saving : t.settings.saveSettings}
-          </Button>
           <Button variant="ghost" onClick={openDataDir}>
             <FolderOpen size={12} strokeWidth={1.75} />
             {t.settings.dataFolder}
@@ -199,9 +210,7 @@ export function SettingsPage() {
             <RefreshCw size={12} strokeWidth={1.75} />
             {t.settings.restartCpa}
           </Button>
-          {msg && (
-            <span className="text-xs font-medium text-run">{msg}</span>
-          )}
+          {msg && <span className="text-xs font-medium text-run">{msg}</span>}
         </div>
 
         {/* ── config.yaml ─────────────────────────────────────────── */}
@@ -209,24 +218,24 @@ export function SettingsPage() {
           title={t.settings.configYaml}
           action={
             <div className="flex gap-1 items-center">
-              <div className="flex gap-0.5 p-0.5 bg-raised rounded border border-border">
-                {(['form', 'yaml'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setConfigTab(tab)}
-                    className={cn(
-                      'text-[10px] px-1.5 py-0.5 rounded border-0 cursor-pointer transition-colors uppercase tracking-wider',
-                      configTab === tab
-                        ? 'bg-hover text-text-1 font-semibold'
-                        : 'bg-transparent text-text-3 hover:text-text-2',
-                    )}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
+              <Tabs
+                items={[
+                  { id: 'form', label: 'FORM' },
+                  { id: 'yaml', label: 'YAML' },
+                ]}
+                active={configTab}
+                onChange={setConfigTab}
+                tabClassName={(active) =>
+                  cn(
+                    'uppercase tracking-wider',
+                    active
+                      ? 'bg-hover text-text-1 font-semibold'
+                      : 'bg-transparent text-text-3 hover:text-text-2',
+                  )
+                }
+              />
               {configTab === 'yaml' && (
-                <Button onClick={handleSaveYaml} disabled={saving} size="sm">
+                <Button onClick={handleSaveYaml} size="sm">
                   {t.settings.saveApply}
                 </Button>
               )}
@@ -241,7 +250,7 @@ export function SettingsPage() {
                 <div
                   style={{
                     padding: '8px 12px',
-                    borderBottom: '1px solid oklch(28% 0.08 22)',
+                    borderBottom: '1px solid var(--c-err-border)',
                     background: 'var(--c-err-bg)',
                     fontSize: 11,
                     color: 'var(--c-err)',
@@ -251,9 +260,7 @@ export function SettingsPage() {
                 </div>
               )}
               <Suspense
-                fallback={
-                  <div className="text-xs text-text-3 px-3 py-4">Loading editor…</div>
-                }
+                fallback={<div className="text-xs text-text-3 px-3 py-4">Loading editor…</div>}
               >
                 <MonacoEditor
                   height={320}
@@ -273,9 +280,7 @@ export function SettingsPage() {
           )}
         </Section>
 
-        <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>
-          {t.settings.restartNote}
-        </p>
+        <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{t.settings.restartNote}</p>
       </div>
     </div>
   )

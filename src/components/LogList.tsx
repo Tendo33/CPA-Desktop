@@ -58,9 +58,8 @@ export function LogList({ lines, autoScroll }: Props) {
                 gap: 0,
                 fontSize: 11,
                 lineHeight: 1.65,
-                borderLeft: line.level === 'stderr'
-                  ? '2px solid var(--c-err)'
-                  : '2px solid transparent',
+                borderLeft:
+                  line.level === 'stderr' ? '2px solid var(--c-err)' : '2px solid transparent',
               }}
             >
               <span
@@ -78,9 +77,7 @@ export function LogList({ lines, autoScroll }: Props) {
               </span>
               <span
                 style={{
-                  color: line.level === 'stderr'
-                    ? 'oklch(72% 0.16 22)'
-                    : 'var(--c-text-2)',
+                  color: line.level === 'stderr' ? 'oklch(72% 0.16 22)' : 'var(--c-text-2)',
                   paddingRight: 12,
                   wordBreak: 'break-all',
                   whiteSpace: 'pre-wrap',

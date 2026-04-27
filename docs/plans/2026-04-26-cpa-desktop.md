@@ -87,6 +87,7 @@ cpa-desktop/
 ## Task 1: Initialize Tauri v2 Project
 
 **Files:**
+
 - Create: `src-tauri/Cargo.toml`
 - Create: `src-tauri/tauri.conf.json`
 - Create: `src-tauri/src/main.rs`
@@ -257,6 +258,7 @@ git commit -m "feat: scaffold Tauri v2 + React + Tailwind + shadcn/ui"
 ## Task 2: Rust — App Data & Settings Module
 
 **Files:**
+
 - Create: `src-tauri/src/app_config.rs`
 - Modify: `src-tauri/src/lib.rs`
 
@@ -433,6 +435,7 @@ git commit -m "feat(rust): app data dirs and settings module"
 ## Task 3: Rust — CPA Binary Downloader
 
 **Files:**
+
 - Create: `src-tauri/src/commands/mod.rs`
 - Create: `src-tauri/src/commands/updater.rs`
 
@@ -686,6 +689,7 @@ git commit -m "feat(rust): CPA binary downloader with platform detection"
 ## Task 4: Rust — CPA Process Manager
 
 **Files:**
+
 - Create: `src-tauri/src/cpa_manager.rs`
 - Create: `src-tauri/src/commands/cpa.rs`
 - Modify: `src-tauri/src/lib.rs`
@@ -951,6 +955,7 @@ git commit -m "feat(rust): CPA process manager - start/stop/health-check"
 ## Task 5: Rust — Log Stream
 
 **Files:**
+
 - Create: `src-tauri/src/log_stream.rs`
 - Modify: `src-tauri/src/cpa_manager.rs` (extract stdio before storing Child)
 
@@ -1087,6 +1092,7 @@ git commit -m "feat(rust): log stream - stdout/stderr capture with ring buffer"
 ## Task 6: Rust — Config Commands & System Tray
 
 **Files:**
+
 - Create: `src-tauri/src/commands/config.rs`
 - Create: `src-tauri/src/tray.rs`
 - Modify: `src-tauri/src/lib.rs`
@@ -1247,6 +1253,7 @@ git commit -m "feat(rust): config commands + system tray + close-to-tray"
 ## Task 7: Frontend — TypeScript Command Wrappers
 
 **Files:**
+
 - Create: `src/lib/tauri.ts`
 - Create: `src/stores/cpa.ts`
 - Create: `src/stores/logs.ts`
@@ -1275,12 +1282,7 @@ export interface LogLine {
   text: string
 }
 
-export type CpaStatus =
-  | 'Idle'
-  | 'Starting'
-  | 'Running'
-  | 'Stopped'
-  | { Error: string }
+export type CpaStatus = 'Idle' | 'Starting' | 'Running' | 'Stopped' | { Error: string }
 
 // CPA process commands
 export const startCpa = () => invoke<void>('start_cpa')
@@ -1298,8 +1300,7 @@ export const getSettings = () => invoke<AppSettings>('get_settings')
 export const saveSettings = (settings: AppSettings) =>
   invoke<void>('save_settings_cmd', { settings })
 export const readConfigYaml = () => invoke<string>('read_config_yaml')
-export const writeConfigYaml = (content: string) =>
-  invoke<void>('write_config_yaml', { content })
+export const writeConfigYaml = (content: string) => invoke<void>('write_config_yaml', { content })
 export const openDataDir = () => invoke<void>('open_data_dir')
 
 // Updater
@@ -1360,9 +1361,7 @@ export const useLogStore = create<LogStore>((set, get) => ({
   lines: [],
   addLine: (line) =>
     set((s) => ({
-      lines: s.lines.length >= MAX_LINES
-        ? [...s.lines.slice(1), line]
-        : [...s.lines, line],
+      lines: s.lines.length >= MAX_LINES ? [...s.lines.slice(1), line] : [...s.lines, line],
     })),
   setLines: (lines) => set({ lines }),
   clear: () => set({ lines: [] }),
@@ -1386,6 +1385,7 @@ git commit -m "feat(frontend): typed Tauri command wrappers and Zustand stores"
 ## Task 8: Frontend — App Shell & Sidebar
 
 **Files:**
+
 - Modify: `src/App.tsx`
 - Create: `src/components/Sidebar.tsx`
 - Create: `src/components/StatusBar.tsx`
@@ -1422,7 +1422,7 @@ export function Sidebar({ current, onChange }: Props) {
             'flex flex-col items-center justify-center h-12 w-full gap-0.5 text-[10px] transition-colors',
             current === id
               ? 'text-white bg-zinc-700'
-              : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+              : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800',
           )}
         >
           <Icon size={18} />
@@ -1441,16 +1441,17 @@ import { useCpaStore } from '@/stores/cpa'
 
 function StatusDot({ status }: { status: string }) {
   const color =
-    status === 'Running' ? 'bg-green-500' :
-    status === 'Starting' ? 'bg-yellow-500 animate-pulse' :
-    'bg-zinc-500'
+    status === 'Running'
+      ? 'bg-green-500'
+      : status === 'Starting'
+        ? 'bg-yellow-500 animate-pulse'
+        : 'bg-zinc-500'
   return <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
 }
 
 export function StatusBar() {
   const { status, port } = useCpaStore()
-  const label =
-    typeof status === 'object' ? `Error: ${status.Error}` : status
+  const label = typeof status === 'object' ? `Error: ${status.Error}` : status
 
   return (
     <div className="flex items-center gap-3 px-4 h-7 text-xs text-zinc-400 bg-zinc-900 border-t border-zinc-800 shrink-0">
@@ -1514,6 +1515,7 @@ git commit -m "feat(frontend): app shell - sidebar + status bar layout"
 ## Task 9: Frontend — Dashboard Page (CPA WebView)
 
 **Files:**
+
 - Create: `src/pages/Dashboard.tsx`
 - Create: `src/components/CpaWebView.tsx`
 
@@ -1551,7 +1553,9 @@ async function closeExisting() {
   try {
     const existing = await Webview.getByLabel(LABEL)
     if (existing) await existing.close()
-  } catch { /* fine */ }
+  } catch {
+    /* fine */
+  }
 }
 
 async function spawnWebview(url: string): Promise<Webview> {
@@ -1561,7 +1565,7 @@ async function spawnWebview(url: string): Promise<Webview> {
   return new Promise((resolve, reject) => {
     const wv = new Webview(win, LABEL, {
       url,
-      x: 56,   // sidebar width
+      x: 56, // sidebar width
       y: 0,
       width,
       height,
@@ -1580,10 +1584,15 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(({ url, visible },
     const token = ++tokenRef.current
     spawnWebview(u)
       .then((wv) => {
-        if (tokenRef.current !== token) { wv.close(); return }
+        if (tokenRef.current !== token) {
+          wv.close()
+          return
+        }
         wvRef.current = wv
-        if (visible) { wv.show(); wv.setFocus().catch(() => {}) }
-        else wv.hide()
+        if (visible) {
+          wv.show()
+          wv.setFocus().catch(() => {})
+        } else wv.hide()
       })
       .catch(console.error)
   }
@@ -1616,14 +1625,20 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(({ url, visible },
   useEffect(() => {
     const win = getCurrentWindow()
     let unlisten: (() => void) | null = null
-    win.onResized(async () => {
-      const wv = wvRef.current
-      if (!wv) return
-      const { width, height } = await getLogicalSize()
-      await wv.setPosition(new LogicalPosition(56, 0))
-      await wv.setSize(new LogicalSize(width, height))
-    }).then((fn) => { unlisten = fn })
-    return () => { unlisten?.() }
+    win
+      .onResized(async () => {
+        const wv = wvRef.current
+        if (!wv) return
+        const { width, height } = await getLogicalSize()
+        await wv.setPosition(new LogicalPosition(56, 0))
+        await wv.setSize(new LogicalSize(width, height))
+      })
+      .then((fn) => {
+        unlisten = fn
+      })
+    return () => {
+      unlisten?.()
+    }
   }, [])
 
   return <div className="w-full h-full" />
@@ -1654,11 +1669,7 @@ export function Dashboard() {
   return (
     <div className="relative w-full h-full bg-zinc-950">
       {/* The child webview fills behind overlays */}
-      <CpaWebView
-        ref={webviewRef}
-        url={managementUrl}
-        visible={isRunning}
-      />
+      <CpaWebView ref={webviewRef} url={managementUrl} visible={isRunning} />
 
       {/* Starting overlay */}
       {isStarting && (
@@ -1672,14 +1683,8 @@ export function Dashboard() {
       {(isError || status === 'Stopped' || status === 'Idle') && !isStarting && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950">
           <AlertCircle className="w-8 h-8 text-zinc-500" />
-          <p className="text-zinc-400">
-            {isError ? (status as any).Error : 'CPA is not running'}
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => startCpa()}
-            className="gap-2"
-          >
+          <p className="text-zinc-400">{isError ? (status as any).Error : 'CPA is not running'}</p>
+          <Button variant="outline" onClick={() => startCpa()} className="gap-2">
             <RefreshCw size={14} />
             Start CPA
           </Button>
@@ -1702,6 +1707,7 @@ git commit -m "feat(frontend): dashboard with CPA child webview and status overl
 ## Task 10: Frontend — Logs Page
 
 **Files:**
+
 - Create: `src/pages/Logs.tsx`
 - Create: `src/components/LogList.tsx`
 
@@ -1731,12 +1737,10 @@ export function LogList({ lines, autoScroll }: Props) {
           key={i}
           className={cn(
             'flex gap-2 hover:bg-zinc-800/50 px-1 rounded',
-            line.level === 'stderr' ? 'text-red-400' : 'text-zinc-300'
+            line.level === 'stderr' ? 'text-red-400' : 'text-zinc-300',
           )}
         >
-          <span className="text-zinc-600 shrink-0 select-none">
-            {line.ts.substring(11, 23)}
-          </span>
+          <span className="text-zinc-600 shrink-0 select-none">{line.ts.substring(11, 23)}</span>
           <span className="break-all">{line.text}</span>
         </div>
       ))}
@@ -1814,11 +1818,18 @@ git commit -m "feat(frontend): logs page with search, auto-scroll, clear"
 ## Task 11: Frontend — Settings Page
 
 **Files:**
+
 - Create: `src/pages/Settings.tsx`
 
 ```tsx
 import { useEffect, useState } from 'react'
-import { getSettings, saveSettings, readConfigYaml, writeConfigYaml, openDataDir } from '@/lib/tauri'
+import {
+  getSettings,
+  saveSettings,
+  readConfigYaml,
+  writeConfigYaml,
+  openDataDir,
+} from '@/lib/tauri'
 import type { AppSettings } from '@/lib/tauri'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1835,7 +1846,9 @@ export function SettingsPage() {
 
   useEffect(() => {
     getSettings().then(setSettings)
-    readConfigYaml().then(setYaml).catch(() => {})
+    readConfigYaml()
+      .then(setYaml)
+      .catch(() => {})
   }, [])
 
   const handleSaveSettings = async () => {
@@ -1931,6 +1944,7 @@ git commit -m "feat(frontend): settings page - port, auto-start, config.yaml edi
 ## Task 12: Frontend — About & Update Page
 
 **Files:**
+
 - Create: `src/pages/About.tsx`
 
 ```tsx
@@ -2008,10 +2022,10 @@ export function AboutPage() {
       <div className="max-w-md space-y-6">
         <div>
           <h1 className="text-xl font-semibold text-zinc-100">CPA Desktop</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Desktop manager for CLIProxyAPI
-          </p>
-          <Badge variant="outline" className="mt-2 text-xs">v{appVersion}</Badge>
+          <p className="text-sm text-zinc-500 mt-1">Desktop manager for CLIProxyAPI</p>
+          <Badge variant="outline" className="mt-2 text-xs">
+            v{appVersion}
+          </Badge>
         </div>
 
         <div className="space-y-3">
@@ -2041,12 +2055,7 @@ export function AboutPage() {
             </Button>
 
             {update?.updateAvailable && !done && (
-              <Button
-                size="sm"
-                onClick={handleUpdate}
-                disabled={downloading}
-                className="gap-1.5"
-              >
+              <Button size="sm" onClick={handleUpdate} disabled={downloading} className="gap-1.5">
                 <Download size={13} />
                 {downloading ? `Downloading... ${pct}%` : `Update to ${update.latestVersion}`}
               </Button>
@@ -2105,6 +2114,7 @@ git commit -m "feat(frontend): about page with CPA update download and progress"
 ## Task 13: First Run Experience (Binary Not Present)
 
 **Files:**
+
 - Create: `src/components/FirstRunSetup.tsx`
 - Modify: `src/App.tsx`
 
@@ -2157,7 +2167,9 @@ export function FirstRunSetup({ onComplete }: Props) {
       }),
       listen('cpa:download-complete', () => onComplete()),
     ]
-    return () => { unsubs.forEach((p) => p.then((fn) => fn())) }
+    return () => {
+      unsubs.forEach((p) => p.then((fn) => fn()))
+    }
   }, [])
 
   const handleDownload = async () => {
@@ -2233,6 +2245,7 @@ git commit -m "feat: first run setup - download CPA binary on fresh install"
 ## Task 14: GitHub Actions CI/CD
 
 **Files:**
+
 - Create: `.github/workflows/release.yml`
 
 **Goal:** Build and publish installers for Windows (msi + nsis), macOS (dmg), Linux (AppImage + deb) on each git tag.

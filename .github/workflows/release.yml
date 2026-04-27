@@ -190,7 +190,7 @@ jobs:
         with:
           name: 'CPA Desktop_${{ github.ref_name }}_aarch64.dmg'
           path: artifacts/arm64/
-        continue-on-error: true  # artifact name may vary
+        continue-on-error: true # artifact name may vary
 
       - name: Create Universal Binary note
         run: |

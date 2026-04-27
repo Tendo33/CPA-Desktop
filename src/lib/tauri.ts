@@ -48,16 +48,14 @@ export const getSettings = () => invoke<AppSettings>('get_settings')
 export const saveSettings = (settings: AppSettings) =>
   invoke<void>('save_settings_cmd', { settings })
 export const readConfigYaml = () => invoke<string>('read_config_yaml')
-export const writeConfigYaml = (content: string) =>
-  invoke<void>('write_config_yaml', { content })
+export const writeConfigYaml = (content: string) => invoke<void>('write_config_yaml', { content })
 export const writeConfigYamlPort = (port: number) =>
   invoke<void>('write_config_yaml_port', { port })
 export const readConfigField = <T = unknown>(path: string) =>
   invoke<T | null>('read_config_field', { path })
 export const writeConfigField = (path: string, value: unknown) =>
   invoke<void>('write_config_field', { path, value })
-export const listConfigBackups = () =>
-  invoke<string[]>('list_config_backups')
+export const listConfigBackups = () => invoke<string[]>('list_config_backups')
 export const restoreConfigBackup = (name: string) =>
   invoke<string>('restore_config_backup', { name })
 export const openDataDir = () => invoke<void>('open_data_dir')
@@ -68,11 +66,8 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 
 // Updater
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
-export const downloadCpaUpdate = (
-  downloadUrl: string,
-  version: string,
-  mirrors?: string[],
-) => invoke<void>('download_cpa_update', { downloadUrl, version, mirrors })
+export const downloadCpaUpdate = (downloadUrl: string, version: string, mirrors?: string[]) =>
+  invoke<void>('download_cpa_update', { downloadUrl, version, mirrors })
 
 // App self-update (Tauri updater plugin)
 import { check, type Update } from '@tauri-apps/plugin-updater'

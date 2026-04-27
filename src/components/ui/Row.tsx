@@ -12,7 +12,7 @@ export function Row({ label, hint, children, first }: RowProps) {
   return (
     <div
       className={cn(
-        'setting-row px-3.5 py-3 bg-surface flex items-center justify-between gap-4',
+        'px-3.5 py-3 bg-surface flex items-center justify-between gap-4',
         !first && 'border-t border-border-sub',
       )}
     >

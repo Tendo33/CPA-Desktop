@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { LogList } from '@/components/LogList'
 import { useLogStore } from '@/stores/logs'
+import { useCpaStore } from '@/stores/cpa'
 import { clearLogs } from '@/lib/tauri'
+import { isRunning } from '@/lib/cpaStatus'
 import { Trash2 } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-import { Input, Toggle } from '@/components/ui'
-import { cn } from '@/lib/utils'
+import { Input, Toggle, Tabs } from '@/components/ui'
 
 type Level = 'all' | 'stdout' | 'stderr'
 
@@ -20,28 +21,45 @@ function loadLevel(): Level {
 
 export function Logs() {
   const { lines, clear } = useLogStore()
+  const { status } = useCpaStore()
+  const cpaRunning = isRunning(status)
   const t = useT()
   const [search, setSearch] = useState<string>(() => localStorage.getItem(LS_SEARCH) ?? '')
-  const [autoScroll, setAutoScroll] = useState<boolean>(() => localStorage.getItem(LS_AUTOSCROLL) !== '0')
+  const [autoScroll, setAutoScroll] = useState<boolean>(
+    () => localStorage.getItem(LS_AUTOSCROLL) !== '0',
+  )
   const [levelFilter, setLevelFilter] = useState<Level>(loadLevel)
 
-  useEffect(() => { localStorage.setItem(LS_LEVEL, levelFilter) }, [levelFilter])
-  useEffect(() => { localStorage.setItem(LS_SEARCH, search) }, [search])
-  useEffect(() => { localStorage.setItem(LS_AUTOSCROLL, autoScroll ? '1' : '0') }, [autoScroll])
+  useEffect(() => {
+    localStorage.setItem(LS_LEVEL, levelFilter)
+  }, [levelFilter])
+  useEffect(() => {
+    localStorage.setItem(LS_SEARCH, search)
+  }, [search])
+  useEffect(() => {
+    localStorage.setItem(LS_AUTOSCROLL, autoScroll ? '1' : '0')
+  }, [autoScroll])
 
   const LEVELS: { id: Level; label: string }[] = [
-    { id: 'all',    label: t.logs.all },
+    { id: 'all', label: t.logs.all },
     { id: 'stdout', label: t.logs.out },
     { id: 'stderr', label: t.logs.err },
   ]
 
-  const filtered = lines.filter((l) => {
-    if (levelFilter !== 'all' && l.level !== levelFilter) return false
-    if (search && !l.text.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  const filtered = useMemo(
+    () =>
+      lines.filter((l) => {
+        if (levelFilter !== 'all' && l.level !== levelFilter) return false
+        if (search && !l.text.toLowerCase().includes(search.toLowerCase())) return false
+        return true
+      }),
+    [lines, levelFilter, search],
+  )
 
-  const handleClear = () => { clearLogs(); clear() }
+  const handleClear = () => {
+    clearLogs()
+    clear()
+  }
 
   return (
     <div className="flex flex-col h-full bg-bg">
@@ -54,27 +72,19 @@ export function Logs() {
           className="w-36"
         />
 
-        <div className="flex gap-0.5 p-0.5 bg-raised rounded-md border border-border">
-          {LEVELS.map(({ id, label }) => {
-            const active = levelFilter === id
-            return (
-              <button
-                key={id}
-                onClick={() => setLevelFilter(id)}
-                className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded border-0 cursor-pointer tracking-wide transition-colors',
-                  active
-                    ? id === 'stderr'
-                      ? 'bg-hover text-err font-semibold'
-                      : 'bg-hover text-text-1 font-semibold'
-                    : 'bg-transparent text-text-3 hover:text-text-2',
-                )}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
+        <Tabs
+          items={LEVELS}
+          active={levelFilter}
+          onChange={setLevelFilter}
+          className="rounded-md"
+          tabClassName={(active, id) =>
+            active
+              ? id === 'stderr'
+                ? 'bg-hover text-err font-semibold'
+                : 'bg-hover text-text-1 font-semibold'
+              : 'bg-transparent text-text-3 hover:text-text-2'
+          }
+        />
 
         <label className="flex items-center gap-1.5 cursor-pointer text-xs">
           <Toggle checked={autoScroll} onChange={setAutoScroll} ariaLabel="Auto-scroll" />
@@ -103,11 +113,42 @@ export function Logs() {
 
       {/* Log content */}
       {lines.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2">
-          <div className="w-8 h-8 rounded-lg border border-border flex items-center justify-center">
-            <span className="text-sm text-text-3">≡</span>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="w-12 h-12 rounded-xl bg-raised border border-border flex items-center justify-center shadow-sm">
+            <span className="text-xl text-text-3">≡</span>
           </div>
-          <p className="text-xs text-text-3">{t.logs.noOutput}</p>
+          <div className="flex flex-col gap-1.5 max-w-[280px]">
+            <p className="text-[15px] font-semibold text-text-1">
+              {!cpaRunning ? 'CPA is not running' : 'No output yet'}
+            </p>
+            <p className="text-[13px] text-text-3 leading-relaxed">
+              {!cpaRunning
+                ? 'Start CPA from the Dashboard to see live logs here.'
+                : 'Waiting for the CPA process to write to stdout or stderr.'}
+            </p>
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="w-12 h-12 rounded-xl bg-raised border border-border flex items-center justify-center shadow-sm">
+            <span className="text-xl text-text-3">⌕</span>
+          </div>
+          <div className="flex flex-col gap-1.5 max-w-[280px]">
+            <p className="text-[15px] font-semibold text-text-1">No matches found</p>
+            <p className="text-[13px] text-text-3 leading-relaxed">
+              No logs match your current search and level filters. Try clearing them to see all
+              output.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setSearch('')
+              setLevelFilter('all')
+            }}
+            className="mt-2 text-[12px] font-medium text-accent hover:text-text-1 transition-colors cursor-pointer bg-transparent border-none"
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
         <LogList lines={filtered} autoScroll={autoScroll} />

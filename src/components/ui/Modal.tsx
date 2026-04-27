@@ -28,9 +28,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         className="min-w-[320px] max-w-[480px] rounded-lg border border-border bg-surface p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {title && (
-          <h2 className="mb-2 text-sm font-semibold text-text-1">{title}</h2>
-        )}
+        {title && <h2 className="mb-2 text-sm font-semibold text-text-1">{title}</h2>}
         {children}
       </div>
     </div>,
