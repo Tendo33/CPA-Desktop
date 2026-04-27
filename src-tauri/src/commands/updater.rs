@@ -83,48 +83,140 @@ pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
     })
 }
 
+async fn download_with_mirrors(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    original_url: &str,
+    mirrors: &[String],
+    partial_path: &std::path::Path,
+) -> Result<Vec<u8>, String> {
+    use futures_util::StreamExt;
+    use std::io::Write;
+
+    let mut last_err: Option<String> = None;
+
+    for mirror in mirrors {
+        let url = apply_mirror(original_url, mirror);
+        log::info!("attempting download via mirror '{mirror}': {url}");
+
+        // Existing partial size for resume
+        let mut downloaded: u64 = std::fs::metadata(partial_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+
+        let mut req = client.get(&url);
+        if downloaded > 0 {
+            req = req.header("Range", format!("bytes={downloaded}-"));
+        }
+
+        let resp = match req.send().await {
+            Ok(r) => r,
+            Err(e) => {
+                last_err = Some(format!("{mirror}: {e}"));
+                continue;
+            }
+        };
+
+        let status = resp.status();
+        if !status.is_success() {
+            last_err = Some(format!("{mirror}: HTTP {status}"));
+            continue;
+        }
+
+        // If server ignored Range, restart from zero.
+        if downloaded > 0 && status.as_u16() == 200 {
+            let _ = std::fs::remove_file(partial_path);
+            downloaded = 0;
+        }
+
+        let total = resp.content_length().unwrap_or(0) + downloaded;
+
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(partial_path)
+            .map_err(|e| e.to_string())?;
+
+        let mut stream = resp.bytes_stream();
+        let mut stream_failed = false;
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(c) => {
+                    if let Err(e) = file.write_all(&c) {
+                        last_err = Some(format!("{mirror}: write error: {e}"));
+                        stream_failed = true;
+                        break;
+                    }
+                    downloaded += c.len() as u64;
+                    if total > 0 {
+                        let _ = app.emit("cpa:download-progress", (downloaded, total));
+                    }
+                }
+                Err(e) => {
+                    last_err = Some(format!("{mirror}: stream error: {e}"));
+                    stream_failed = true;
+                    break;
+                }
+            }
+        }
+        drop(file);
+
+        if stream_failed {
+            // Keep partial — try the next mirror with Range resume.
+            continue;
+        }
+
+        // Done — read full buffer and clean up partial.
+        let buf = std::fs::read(partial_path).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(partial_path);
+        return Ok(buf);
+    }
+
+    Err(last_err.unwrap_or_else(|| "all mirrors failed".into()))
+}
+
+/// Map a GitHub asset URL through a mirror host. `github.com` keeps the URL as-is.
+fn apply_mirror(url: &str, mirror: &str) -> String {
+    let m = mirror.trim().trim_end_matches('/');
+    if m.is_empty() || m == "github.com" {
+        url.to_string()
+    } else if m.starts_with("http://") || m.starts_with("https://") {
+        format!("{m}/{url}")
+    } else {
+        format!("https://{m}/{url}")
+    }
+}
+
 #[tauri::command]
 pub async fn download_cpa_update(
     app: AppHandle,
     download_url: String,
     version: String,
+    mirrors: Option<Vec<String>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .user_agent("CPA-Desktop/0.1")
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client
-        .get(&download_url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let total = resp.content_length().unwrap_or(0);
-    let mut downloaded: u64 = 0;
-
-    use futures_util::StreamExt;
-    let mut stream = resp.bytes_stream();
-    let mut buf: Vec<u8> = Vec::new();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
-        buf.extend_from_slice(&chunk);
-        if total > 0 {
-            let _ = app.emit("cpa:download-progress", (downloaded, total));
-        }
-    }
-
-    // Ensure CPA is fully stopped before replacing binary (critical on Windows)
-    if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
-        crate::cpa_manager::kill_cpa(&cpa_state);
-        // Give OS time to release file locks
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    }
-
     let bin_dir = app_config::bin_dir(&app);
     std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
+    let partial_path = bin_dir.join("download.partial");
+
+    let mirrors = mirrors.unwrap_or_else(|| {
+        vec![
+            "github.com".to_string(),
+            "gh-proxy.com".to_string(),
+            "ghproxy.com".to_string(),
+        ]
+    });
+
+    let buf = download_with_mirrors(&app, &client, &download_url, &mirrors, &partial_path).await?;
+
+    if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
+        crate::cpa_manager::kill_cpa(&cpa_state);
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
 
     let binary_name = if cfg!(target_os = "windows") {
         "cli-proxy-api.exe"
@@ -246,6 +338,26 @@ mod tests {
         assert_eq!(
             asset_name_for("0.5.0", "linux", "x86_64"),
             "CLIProxyAPI_0.5.0_linux_amd64.tar.gz"
+        );
+    }
+
+    #[test]
+    fn mirror_passthrough_for_github() {
+        let url = "https://github.com/x/y/releases/download/v1/file.tar.gz";
+        assert_eq!(apply_mirror(url, "github.com"), url);
+        assert_eq!(apply_mirror(url, ""), url);
+    }
+
+    #[test]
+    fn mirror_prepends_proxy_host() {
+        let url = "https://github.com/x/y/releases/download/v1/file.tar.gz";
+        assert_eq!(
+            apply_mirror(url, "gh-proxy.com"),
+            "https://gh-proxy.com/https://github.com/x/y/releases/download/v1/file.tar.gz",
+        );
+        assert_eq!(
+            apply_mirror(url, "https://ghproxy.com/"),
+            "https://ghproxy.com/https://github.com/x/y/releases/download/v1/file.tar.gz",
         );
     }
 }

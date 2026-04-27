@@ -17,7 +17,7 @@ import {
 import { useCpaStore } from '@/stores/cpa'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-import { Button, NumberInput, Row, Section, Toggle } from '@/components/ui'
+import { Button, Input, NumberInput, Row, Section, Toggle } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
@@ -163,6 +163,25 @@ export function SettingsPage() {
             <Toggle
               checked={settings.autoCheckAppUpdates ?? false}
               onChange={(v) => setSettings({ ...settings, autoCheckAppUpdates: v })}
+            />
+          </Row>
+
+          <Row
+            label="Download mirrors"
+            hint="Comma-separated host list, tried in order"
+          >
+            <Input
+              value={(settings.mirrors ?? []).join(', ')}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  mirrors: e.target.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              className="w-72"
             />
           </Row>
         </Section>

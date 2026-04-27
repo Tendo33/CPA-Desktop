@@ -28,6 +28,16 @@ pub struct AppSettings {
     pub last_panic: Option<LastPanic>,
     #[serde(default)]
     pub auto_check_app_updates: bool,
+    #[serde(default = "default_mirrors")]
+    pub mirrors: Vec<String>,
+}
+
+fn default_mirrors() -> Vec<String> {
+    vec![
+        "github.com".to_string(),
+        "gh-proxy.com".to_string(),
+        "ghproxy.com".to_string(),
+    ]
 }
 
 impl Default for AppSettings {
@@ -39,6 +49,7 @@ impl Default for AppSettings {
             cpa_version: None,
             last_panic: None,
             auto_check_app_updates: false,
+            mirrors: default_mirrors(),
         }
     }
 }

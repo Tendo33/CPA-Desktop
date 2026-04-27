@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { checkCpaUpdate, downloadCpaUpdate, type UpdateCheckResult } from '@/lib/tauri'
+import { checkCpaUpdate, downloadCpaUpdate, getSettings, type UpdateCheckResult } from '@/lib/tauri'
 import { listen } from '@tauri-apps/api/event'
 import { useT } from '@/lib/i18n'
 import { Button } from '@/components/ui'
@@ -15,6 +15,13 @@ export function FirstRunSetup({ onComplete }: Props) {
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress]     = useState(0)
   const [error, setError]           = useState('')
+  const [mirrors, setMirrors]       = useState<string[]>([])
+
+  useEffect(() => {
+    void getSettings()
+      .then((s) => setMirrors(s.mirrors ?? []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     checkCpaUpdate()
@@ -37,7 +44,11 @@ export function FirstRunSetup({ onComplete }: Props) {
     setDownloading(true)
     setError('')
     try {
-      await downloadCpaUpdate(update.downloadUrl, update.latestVersion)
+      await downloadCpaUpdate(
+        update.downloadUrl,
+        update.latestVersion,
+        mirrors.length ? mirrors : undefined,
+      )
     } catch (e) {
       setError(String(e))
       setDownloading(false)

@@ -12,6 +12,7 @@ export interface AppSettings {
   cpaVersion: string | null
   lastPanic?: LastPanic | null
   autoCheckAppUpdates?: boolean
+  mirrors?: string[]
 }
 
 export interface UpdateCheckResult {
@@ -67,8 +68,11 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 
 // Updater
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
-export const downloadCpaUpdate = (downloadUrl: string, version: string) =>
-  invoke<void>('download_cpa_update', { downloadUrl, version })
+export const downloadCpaUpdate = (
+  downloadUrl: string,
+  version: string,
+  mirrors?: string[],
+) => invoke<void>('download_cpa_update', { downloadUrl, version, mirrors })
 
 // App self-update (Tauri updater plugin)
 import { check, type Update } from '@tauri-apps/plugin-updater'

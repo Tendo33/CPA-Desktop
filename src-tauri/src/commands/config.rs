@@ -148,7 +148,9 @@ pub fn read_config_field(
         serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?;
     let mut cur = &doc;
     for p in path.split('.').filter(|p| !p.is_empty()) {
-        let Some(map) = cur.as_mapping() else { return Ok(None) };
+        let Some(map) = cur.as_mapping() else {
+            return Ok(None);
+        };
         let Some(next) = map.get(serde_yaml::Value::String(p.to_string())) else {
             return Ok(None);
         };

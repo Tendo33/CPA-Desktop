@@ -65,7 +65,8 @@ export function AboutPage() {
     setError('')
     try {
       if (status.kind === 'Running') await stopCpa()
-      await downloadCpaUpdate(update.downloadUrl, update.latestVersion)
+      const mirrors = (await getSettings().catch(() => null))?.mirrors
+      await downloadCpaUpdate(update.downloadUrl, update.latestVersion, mirrors)
     } catch (e) {
       setError(String(e))
       setDownloading(false)
