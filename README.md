@@ -14,7 +14,24 @@ A cross-platform desktop app for [CLIProxyAPI](https://github.com/router-for-me/
 
 ## Screenshots
 
-> Dashboard shows CPA's built-in management panel (`/management.html#/quota`)
+| Dashboard | Logs | Settings |
+|---|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Logs](docs/screenshots/logs.png) | ![Settings](docs/screenshots/settings.png) |
+
+> Dashboard shows CPA's built-in management panel (`/management.html#/quota`).
+> Run `npm run tauri dev` and capture each tab at 1280×800 to refresh the images.
+
+## Unsigned builds
+
+Until v0.2.0 the binaries are unsigned. The first launch will be blocked by Gatekeeper / SmartScreen.
+
+**macOS** — clear the quarantine attribute once after copying to Applications:
+
+```sh
+xattr -cr "/Applications/CPA Desktop.app"
+```
+
+**Windows** — on the SmartScreen prompt, click *More info* → *Run anyway*.
 
 ## Platforms
 
