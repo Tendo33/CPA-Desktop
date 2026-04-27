@@ -76,6 +76,10 @@ pub fn logs_dir(app: &tauri::AppHandle) -> PathBuf {
     data_dir(app).join("logs")
 }
 
+pub fn backups_dir(app: &tauri::AppHandle) -> PathBuf {
+    data_dir(app).join("backups")
+}
+
 pub fn load_settings(app: &tauri::AppHandle) -> AppSettings {
     load_settings_at(&settings_path(app))
 }

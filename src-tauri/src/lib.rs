@@ -165,6 +165,8 @@ pub fn run() {
             commands::config::get_autolaunch_enabled,
             commands::config::set_autolaunch_enabled,
             commands::config::write_config_yaml_port,
+            commands::config::list_config_backups,
+            commands::config::restore_config_backup,
             commands::diag::report_frontend_error,
             commands::diag::open_logs_folder,
         ])

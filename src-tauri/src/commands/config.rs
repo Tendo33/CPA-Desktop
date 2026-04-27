@@ -51,7 +51,60 @@ pub fn write_config_yaml(app: AppHandle, content: String) -> Result<(), String> 
     serde_yaml::from_str::<serde_yaml::Value>(&content)
         .map_err(|e| format!("Invalid YAML: {e}"))?;
     let path = app_config::config_yaml_path(&app);
+    if path.exists() {
+        let backups = app_config::backups_dir(&app);
+        std::fs::create_dir_all(&backups).map_err(|e| e.to_string())?;
+        let ts = chrono::Local::now().format("%Y%m%dT%H%M%S");
+        let backup_path = backups.join(format!("config.yaml.{ts}"));
+        let _ = std::fs::copy(&path, &backup_path);
+        prune_backups(&backups, 10);
+    }
     std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+fn prune_backups(dir: &std::path::Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+    while files.len() > keep {
+        if let Some(old) = files.first() {
+            let _ = std::fs::remove_file(old.path());
+        }
+        files.remove(0);
+    }
+}
+
+#[tauri::command]
+pub fn list_config_backups(app: AppHandle) -> Result<Vec<String>, String> {
+    let dir = app_config::backups_dir(&app);
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut names: Vec<(std::time::SystemTime, String)> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let mtime = e.metadata().ok()?.modified().ok()?;
+            let name = e.file_name().to_string_lossy().to_string();
+            Some((mtime, name))
+        })
+        .collect();
+    names.sort_by_key(|n| std::cmp::Reverse(n.0));
+    Ok(names.into_iter().map(|(_, n)| n).collect())
+}
+
+#[tauri::command]
+pub fn restore_config_backup(app: AppHandle, name: String) -> Result<String, String> {
+    let dir = app_config::backups_dir(&app);
+    let src = dir.join(&name);
+    if !src.exists() {
+        return Err(format!("backup '{name}' not found"));
+    }
+    let dst = app_config::config_yaml_path(&app);
+    std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
+    std::fs::read_to_string(&dst).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -100,4 +153,23 @@ pub fn open_data_dir(app: AppHandle) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prune_backups_keeps_only_n_newest() {
+        let tmp = tempfile::tempdir().unwrap();
+        for i in 0..15 {
+            let p = tmp.path().join(format!("config.yaml.{i}"));
+            std::fs::write(&p, format!("v{i}")).unwrap();
+            // Ensure mtimes order by sleeping briefly is overkill; keep order by name.
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        prune_backups(tmp.path(), 10);
+        let count = std::fs::read_dir(tmp.path()).unwrap().count();
+        assert_eq!(count, 10);
+    }
 }
