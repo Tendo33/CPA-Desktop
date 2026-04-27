@@ -1,18 +1,33 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LogList } from '@/components/LogList'
 import { useLogStore } from '@/stores/logs'
 import { clearLogs } from '@/lib/tauri'
 import { Trash2 } from 'lucide-react'
 import { useT } from '@/lib/i18n'
+import { Input, Toggle } from '@/components/ui'
+import { cn } from '@/lib/utils'
 
 type Level = 'all' | 'stdout' | 'stderr'
+
+const LS_LEVEL = 'cpa.logs.level'
+const LS_SEARCH = 'cpa.logs.search'
+const LS_AUTOSCROLL = 'cpa.logs.autoscroll'
+
+function loadLevel(): Level {
+  const v = localStorage.getItem(LS_LEVEL)
+  return v === 'stdout' || v === 'stderr' || v === 'all' ? v : 'all'
+}
 
 export function Logs() {
   const { lines, clear } = useLogStore()
   const t = useT()
-  const [search, setSearch]           = useState('')
-  const [autoScroll, setAutoScroll]   = useState(true)
-  const [levelFilter, setLevelFilter] = useState<Level>('all')
+  const [search, setSearch] = useState<string>(() => localStorage.getItem(LS_SEARCH) ?? '')
+  const [autoScroll, setAutoScroll] = useState<boolean>(() => localStorage.getItem(LS_AUTOSCROLL) !== '0')
+  const [levelFilter, setLevelFilter] = useState<Level>(loadLevel)
+
+  useEffect(() => { localStorage.setItem(LS_LEVEL, levelFilter) }, [levelFilter])
+  useEffect(() => { localStorage.setItem(LS_SEARCH, search) }, [search])
+  useEffect(() => { localStorage.setItem(LS_AUTOSCROLL, autoScroll ? '1' : '0') }, [autoScroll])
 
   const LEVELS: { id: Level; label: string }[] = [
     { id: 'all',    label: t.logs.all },
@@ -29,67 +44,31 @@ export function Logs() {
   const handleClear = () => { clearLogs(); clear() }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--c-bg)' }}>
-
+    <div className="flex flex-col h-full bg-bg">
       {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '0 10px',
-          height: 36,
-          background: 'var(--c-surface)',
-          borderBottom: '1px solid var(--c-border-sub)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Search */}
-        <input
+      <div className="flex items-center gap-2 px-2.5 h-9 bg-surface border-b border-border-sub flex-shrink-0">
+        <Input
           placeholder={t.logs.filter}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="selectable"
-          style={{
-            height: 22,
-            background: 'var(--c-raised)',
-            border: '1px solid var(--c-border)',
-            borderRadius: 4,
-            padding: '0 8px',
-            fontSize: 11,
-            color: 'var(--c-text-1)',
-            outline: 'none',
-            width: 140,
-            fontFamily: 'inherit',
-            transition: 'border-color 130ms ease',
-          }}
-          onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--c-accent-dim)')}
-          onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--c-border)')}
+          className="w-36"
         />
 
-        {/* Level pills */}
-        <div style={{ display: 'flex', gap: 2, padding: '2px', background: 'var(--c-raised)', borderRadius: 5, border: '1px solid var(--c-border)' }}>
+        <div className="flex gap-0.5 p-0.5 bg-raised rounded-md border border-border">
           {LEVELS.map(({ id, label }) => {
             const active = levelFilter === id
             return (
               <button
                 key={id}
                 onClick={() => setLevelFilter(id)}
-                style={{
-                  fontSize: 10,
-                  fontWeight: active ? 600 : 400,
-                  fontFamily: 'inherit',
-                  padding: '1px 7px',
-                  borderRadius: 3,
-                  border: 'none',
-                  cursor: 'pointer',
-                  letterSpacing: '0.02em',
-                  transition: 'background 120ms ease, color 120ms ease',
-                  background: active ? 'var(--c-hover)' : 'transparent',
-                  color: active
-                    ? (id === 'stderr' ? 'var(--c-err)' : 'var(--c-text-1)')
-                    : 'var(--c-text-3)',
-                }}
+                className={cn(
+                  'text-[10px] px-1.5 py-0.5 rounded border-0 cursor-pointer tracking-wide transition-colors',
+                  active
+                    ? id === 'stderr'
+                      ? 'bg-hover text-err font-semibold'
+                      : 'bg-hover text-text-1 font-semibold'
+                    : 'bg-transparent text-text-3 hover:text-text-2',
+                )}
               >
                 {label}
               </button>
@@ -97,73 +76,26 @@ export function Logs() {
           })}
         </div>
 
-        {/* Auto-scroll */}
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            cursor: 'pointer',
-            fontSize: 11,
-            color: autoScroll ? 'var(--c-text-2)' : 'var(--c-text-3)',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={autoScroll}
-            onChange={(e) => setAutoScroll(e.target.checked)}
-            style={{ display: 'none' }}
-          />
-          <button
-            className={`toggle ${autoScroll ? 'on' : ''}`}
-            onClick={() => setAutoScroll((v) => !v)}
-            aria-label="Auto-scroll"
+        <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+          <Toggle checked={autoScroll} onChange={setAutoScroll} ariaLabel="Auto-scroll" />
+          <span
+            className="select-none"
+            style={{ color: autoScroll ? 'var(--c-text-2)' : 'var(--c-text-3)' }}
           >
-            <span className="toggle-thumb" />
-          </button>
-          <span style={{ userSelect: 'none' }}>{t.logs.tail}</span>
+            {t.logs.tail}
+          </span>
         </label>
 
-        {/* Count */}
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: 10,
-            color: 'var(--c-text-3)',
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '0.01em',
-          }}
-        >
+        <span className="ml-auto text-[10px] text-text-3 tabular-nums">
           {filtered.length !== lines.length
             ? t.logs.filteredLines(filtered.length, lines.length)
             : t.logs.lines(lines.length)}
         </span>
 
-        {/* Clear */}
         <button
           onClick={handleClear}
           title={t.logs.clearLogs}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 24,
-            height: 24,
-            borderRadius: 4,
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--c-text-3)',
-            cursor: 'pointer',
-            transition: 'background 120ms ease, color 120ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--c-hover)'
-            e.currentTarget.style.color = 'var(--c-err)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = 'var(--c-text-3)'
-          }}
+          className="flex items-center justify-center w-6 h-6 rounded border-0 bg-transparent text-text-3 cursor-pointer transition-colors hover:bg-hover hover:text-err"
         >
           <Trash2 size={13} strokeWidth={1.75} />
         </button>
@@ -171,27 +103,11 @@ export function Logs() {
 
       {/* Log content */}
       {lines.length === 0 ? (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          <div style={{
-            width: 32, height: 32,
-            borderRadius: 8,
-            border: '1px solid var(--c-border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ fontSize: 14, color: 'var(--c-text-3)' }}>≡</span>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+          <div className="w-8 h-8 rounded-lg border border-border flex items-center justify-center">
+            <span className="text-sm text-text-3">≡</span>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--c-text-3)' }}>
-            {t.logs.noOutput}
-          </p>
+          <p className="text-xs text-text-3">{t.logs.noOutput}</p>
         </div>
       ) : (
         <LogList lines={filtered} autoScroll={autoScroll} />
