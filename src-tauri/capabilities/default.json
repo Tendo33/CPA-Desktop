@@ -21,6 +21,8 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "window-state:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "updater:default",
+    "process:default"
   ]
 }
