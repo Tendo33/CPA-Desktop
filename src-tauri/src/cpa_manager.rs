@@ -3,13 +3,12 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "kind", content = "data")]
 pub enum CpaStatus {
     Idle,
     Starting,
     Running,
     Stopped,
-    #[serde(rename = "error")]
     Error(String),
 }
 
@@ -111,21 +110,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn idle_serializes_per_camelcase_rename() {
+    fn idle_serializes_with_kind_tag() {
         let s = serde_json::to_string(&CpaStatus::Idle).unwrap();
-        assert_eq!(s, "\"idle\"");
+        assert_eq!(s, "{\"kind\":\"Idle\"}");
     }
 
     #[test]
-    fn running_serializes_per_camelcase_rename() {
+    fn running_serializes_with_kind_tag() {
         let s = serde_json::to_string(&CpaStatus::Running).unwrap();
-        assert_eq!(s, "\"running\"");
+        assert_eq!(s, "{\"kind\":\"Running\"}");
     }
 
     #[test]
-    fn error_serializes_as_object() {
+    fn error_serializes_with_data() {
         let s = serde_json::to_string(&CpaStatus::Error("boom".into())).unwrap();
-        assert!(s.contains("\"error\""));
-        assert!(s.contains("\"boom\""));
+        assert_eq!(s, "{\"kind\":\"Error\",\"data\":\"boom\"}");
+    }
+
+    #[test]
+    fn roundtrips_via_serde() {
+        let original = CpaStatus::Error("bang".into());
+        let s = serde_json::to_string(&original).unwrap();
+        let parsed: CpaStatus = serde_json::from_str(&s).unwrap();
+        assert_eq!(parsed, original);
     }
 }

@@ -19,12 +19,8 @@ export interface LogLine {
   text: string
 }
 
-export type CpaStatus =
-  | 'Idle'
-  | 'Starting'
-  | 'Running'
-  | 'Stopped'
-  | { error: string }
+export type { CpaStatus } from '@/types/cpa'
+import type { CpaStatus } from '@/types/cpa'
 
 // CPA process
 export const startCpa = () => invoke<void>('start_cpa')

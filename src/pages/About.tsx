@@ -56,7 +56,7 @@ export function AboutPage() {
     setDone(false)
     setError('')
     try {
-      if (status === 'Running') await stopCpa()
+      if (status.kind === 'Running') await stopCpa()
       await downloadCpaUpdate(update.downloadUrl, update.latestVersion)
     } catch (e) {
       setError(String(e))

@@ -168,7 +168,7 @@ export function SettingsPage() {
   }
 
   const handleRestartCpa = async () => {
-    if (status === 'Running') await stopCpa()
+    if (status.kind === 'Running') await stopCpa()
     setTimeout(() => startCpa(), 500)
   }
 

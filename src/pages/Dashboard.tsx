@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { CpaWebView, type CpaWebViewHandle } from '@/components/CpaWebView'
 import { useCpaStore } from '@/stores/cpa'
 import { startCpa } from '@/lib/tauri'
+import { isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
 
 export function Dashboard() {
@@ -9,21 +10,21 @@ export function Dashboard() {
   const webviewRef = useRef<CpaWebViewHandle>(null)
   const t = useT()
 
-  const isRunning  = status === 'Running'
-  const isStarting = status === 'Starting'
-  const isError    = typeof status === 'object'
-  const isIdle     = status === 'Idle'
-  const isStopped  = status === 'Stopped'
-  const showOverlay = !isRunning
+  const running  = isRunning(status)
+  const starting = isStarting(status)
+  const error    = isError(status)
+  const idle     = isIdle(status)
+  const stopped  = isStopped(status)
+  const showOverlay = !running
 
   const managementUrl = `http://localhost:${port}/management.html#/quota`
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--c-bg)', overflow: 'hidden' }}>
-      <CpaWebView ref={webviewRef} url={managementUrl} visible={isRunning} />
+      <CpaWebView ref={webviewRef} url={managementUrl} visible={running} />
 
       {/* Starting overlay */}
-      {isStarting && (
+      {starting && (
         <Overlay>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             {/* Animated rings */}
@@ -60,7 +61,7 @@ export function Dashboard() {
       )}
 
       {/* Idle — binary not running */}
-      {isIdle && !isStarting && (
+      {idle && !starting && (
         <Overlay>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
             <div style={{
@@ -96,32 +97,32 @@ export function Dashboard() {
       )}
 
       {/* Stopped / Error */}
-      {(isStopped || isError) && !isStarting && (
+      {(stopped || error) && !starting && (
         <Overlay>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             {/* Icon */}
             <div style={{
               width: 52, height: 52,
               borderRadius: 14,
-              background: isError ? 'var(--c-err-bg)' : 'var(--c-raised)',
-              border: `1px solid ${isError ? 'oklch(28% 0.08 22)' : 'var(--c-border)'}`,
+              background: error ? 'var(--c-err-bg)' : 'var(--c-raised)',
+              border: `1px solid ${error ? 'oklch(28% 0.08 22)' : 'var(--c-border)'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 22,
-              color: isError ? 'var(--c-err)' : 'var(--c-text-3)',
+              color: error ? 'var(--c-err)' : 'var(--c-text-3)',
             }}>
-              {isError ? '!' : '⏹'}
+              {error ? '!' : '⏹'}
             </div>
 
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text-1)' }}>
-                {isError ? t.dashboard.stoppedUnexpectedly : t.dashboard.notRunning}
+                {error ? t.dashboard.stoppedUnexpectedly : t.dashboard.notRunning}
               </p>
-              {isError && (
+              {error && status.kind === 'Error' && (
                 <p
                   className="selectable"
                   style={{ fontSize: 11, color: 'var(--c-err)', maxWidth: 320, opacity: 0.85 }}
                 >
-                  {(status as { error: string }).error}
+                  {status.data}
                 </p>
               )}
             </div>
@@ -131,7 +132,7 @@ export function Dashboard() {
               className="btn btn-primary"
               style={{ fontSize: 13, padding: '7px 20px' }}
             >
-              {isError ? t.dashboard.restartCpa : t.dashboard.startCpa}
+              {error ? t.dashboard.restartCpa : t.dashboard.startCpa}
             </button>
           </div>
         </Overlay>

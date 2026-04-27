@@ -1,23 +1,25 @@
 import { useCpaStore } from '@/stores/cpa'
 import { startCpa, stopCpa } from '@/lib/tauri'
 import type { CpaStatus } from '@/lib/tauri'
+import { errorOf, isRunning, isStarting } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
 import { dotClass, statusColor } from '@/components/statusbar.helpers'
 
 export function StatusBar() {
   const { status, port } = useCpaStore()
   const t = useT()
-  const isRunning  = status === 'Running'
-  const isStarting = status === 'Starting'
-  const errorMsg   = typeof status === 'object' ? (status as { error: string }).error : null
+  const running  = isRunning(status)
+  const starting = isStarting(status)
+  const errorMsg = errorOf(status)
 
   function statusText(s: CpaStatus): string {
-    if (s === 'Running')  return t.status.running
-    if (s === 'Starting') return t.status.starting
-    if (s === 'Stopped')  return t.status.stopped
-    if (s === 'Idle')     return t.status.notStarted
-    if (typeof s === 'object') return t.status.error
-    return String(s)
+    switch (s.kind) {
+      case 'Running':  return t.status.running
+      case 'Starting': return t.status.starting
+      case 'Stopped':  return t.status.stopped
+      case 'Idle':     return t.status.notStarted
+      case 'Error':    return t.status.error
+    }
   }
 
   return (
@@ -81,8 +83,8 @@ export function StatusBar() {
 
       {/* Start / Stop */}
       <button
-        onClick={() => (isRunning || isStarting ? stopCpa() : startCpa())}
-        disabled={isStarting}
+        onClick={() => (running || starting ? stopCpa() : startCpa())}
+        disabled={starting}
         style={{
           fontSize: 11,
           fontWeight: 500,
@@ -90,9 +92,9 @@ export function StatusBar() {
           padding: '1px 8px',
           borderRadius: 4,
           border: '1px solid',
-          cursor: isStarting ? 'default' : 'pointer',
+          cursor: starting ? 'default' : 'pointer',
           transition: 'background 130ms ease, color 130ms ease',
-          ...(isRunning
+          ...(running
             ? {
                 background: 'transparent',
                 borderColor: 'var(--c-border)',
@@ -105,8 +107,8 @@ export function StatusBar() {
               }),
         }}
         onMouseEnter={(e) => {
-          if (isStarting) return
-          if (isRunning) {
+          if (starting) return
+          if (running) {
             e.currentTarget.style.background = 'var(--c-err-bg)'
             e.currentTarget.style.borderColor = 'oklch(28% 0.07 22)'
             e.currentTarget.style.color = 'var(--c-err)'
@@ -116,8 +118,8 @@ export function StatusBar() {
           }
         }}
         onMouseLeave={(e) => {
-          if (isStarting) return
-          if (isRunning) {
+          if (starting) return
+          if (running) {
             e.currentTarget.style.background = 'transparent'
             e.currentTarget.style.borderColor = 'var(--c-border)'
             e.currentTarget.style.color = 'var(--c-text-3)'
@@ -128,7 +130,7 @@ export function StatusBar() {
           }
         }}
       >
-        {isRunning ? t.status.stop : isStarting ? t.status.startingEllipsis : t.status.start}
+        {running ? t.status.stop : starting ? t.status.startingEllipsis : t.status.start}
       </button>
     </div>
   )

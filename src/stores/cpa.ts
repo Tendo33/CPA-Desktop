@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCpaStatus, getCpaPort, type CpaStatus } from '@/lib/tauri'
+import { IDLE } from '@/lib/cpaStatus'
 import { DEFAULT_PORT } from '@/constants'
 
 interface CpaStore {
@@ -12,7 +13,7 @@ interface CpaStore {
 }
 
 export const useCpaStore = create<CpaStore>((set) => ({
-  status: 'Idle',
+  status: IDLE,
   port: DEFAULT_PORT,
   initialized: false,
   setStatus: (status) => set({ status }),

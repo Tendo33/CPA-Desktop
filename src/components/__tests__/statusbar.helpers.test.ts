@@ -4,19 +4,19 @@ import type { CpaStatus } from '@/lib/tauri'
 
 describe('StatusBar helpers', () => {
   const cases: Array<[CpaStatus, string, string]> = [
-    ['Running', 'status-dot running', 'var(--c-run)'],
-    ['Starting', 'status-dot starting', 'var(--c-start)'],
-    ['Stopped', 'status-dot idle', 'var(--c-text-3)'],
-    ['Idle', 'status-dot idle', 'var(--c-text-3)'],
+    [{ kind: 'Running' }, 'status-dot running', 'var(--c-run)'],
+    [{ kind: 'Starting' }, 'status-dot starting', 'var(--c-start)'],
+    [{ kind: 'Stopped' }, 'status-dot idle', 'var(--c-text-3)'],
+    [{ kind: 'Idle' }, 'status-dot idle', 'var(--c-text-3)'],
   ]
 
-  it.each(cases)('%s -> %s / %s', (s, dot, color) => {
+  it.each(cases)('%j -> %s / %s', (s, dot, color) => {
     expect(dotClass(s)).toBe(dot)
     expect(statusColor(s)).toBe(color)
   })
 
-  it('object error -> error dot + err color', () => {
-    const status = { error: 'boom' } as unknown as CpaStatus
+  it('error variant -> error dot + err color', () => {
+    const status: CpaStatus = { kind: 'Error', data: 'boom' }
     expect(dotClass(status)).toBe('status-dot error')
     expect(statusColor(status)).toBe('var(--c-err)')
   })
