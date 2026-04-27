@@ -1,8 +1,8 @@
-mod app_config;
-mod commands;
-mod cpa_manager;
-mod log_stream;
-mod tray;
+pub mod app_config;
+pub mod commands;
+pub mod cpa_manager;
+pub mod log_stream;
+pub mod tray;
 
 use cpa_manager::SharedCpaState;
 use log_stream::LogBuffer;
