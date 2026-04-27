@@ -58,6 +58,10 @@ pub fn config_yaml_path(app: &tauri::AppHandle) -> PathBuf {
     data_dir(app).join("config.yaml")
 }
 
+pub fn logs_dir(app: &tauri::AppHandle) -> PathBuf {
+    data_dir(app).join("logs")
+}
+
 pub fn load_settings(app: &tauri::AppHandle) -> AppSettings {
     load_settings_at(&settings_path(app))
 }

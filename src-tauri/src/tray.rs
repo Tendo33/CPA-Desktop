@@ -1,7 +1,7 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{TrayIconBuilder, TrayIconEvent},
-    AppHandle, Listener, Manager,
+    AppHandle, Emitter, Listener, Manager,
 };
 
 use crate::cpa_manager::CpaStatus;
@@ -14,8 +14,15 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
     let start = MenuItemBuilder::new("Start CPA").id("start").build(app)?;
     let stop = MenuItemBuilder::new("Stop CPA").id("stop").build(app)?;
+    let open_logs = MenuItemBuilder::new("Open Log Folder")
+        .id("open-logs")
+        .build(app)?;
+    let check_updates = MenuItemBuilder::new("Check for Updates")
+        .id("check-updates")
+        .build(app)?;
     let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
     let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let sep3 = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItemBuilder::new("Quit CPA Desktop")
         .id("quit")
         .build(app)?;
@@ -26,6 +33,9 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&start)
         .item(&stop)
         .item(&sep2)
+        .item(&open_logs)
+        .item(&check_updates)
+        .item(&sep3)
         .item(&quit)
         .build()?;
 
@@ -42,6 +52,15 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             "stop" => crate::cpa_lifecycle::stop(app),
+            "open-logs" => {
+                let dir = crate::app_config::logs_dir(app);
+                let _ = std::fs::create_dir_all(&dir);
+                let _ =
+                    tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>);
+            }
+            "check-updates" => {
+                let _ = app.emit("app:check-updates", ());
+            }
             "quit" => {
                 crate::cpa_lifecycle::stop(app);
                 app.exit(0);
