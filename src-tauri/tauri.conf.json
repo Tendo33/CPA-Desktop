@@ -26,7 +26,7 @@
       "iconAsTemplate": true
     },
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://*; img-src 'self' data: blob: http://localhost:* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://*"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://api.github.com https://github.com https://objects.githubusercontent.com https://*.githubusercontent.com; img-src 'self' data: blob: http://localhost:* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://*"
     }
   },
   "bundle": {
