@@ -1,5 +1,7 @@
 use crate::app_config::{self, AppSettings};
-use tauri::AppHandle;
+use crate::cpa_manager::SharedCpaState;
+use tauri::{AppHandle, State};
+use tauri_plugin_autostart::ManagerExt;
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> AppSettings {
@@ -7,8 +9,36 @@ pub fn get_settings(app: AppHandle) -> AppSettings {
 }
 
 #[tauri::command]
-pub fn save_settings_cmd(app: AppHandle, settings: AppSettings) -> Result<(), String> {
+pub fn save_settings_cmd(
+    app: AppHandle,
+    state: State<'_, SharedCpaState>,
+    settings: AppSettings,
+) -> Result<(), String> {
+    // Update the live port in the running CPA state
+    state.lock().unwrap().port = settings.port;
     app_config::save_settings(&app, &settings)
+}
+
+#[tauri::command]
+pub fn get_port_from_yaml(app: AppHandle) -> Result<u16, String> {
+    app_config::read_port_from_yaml(&app)
+}
+
+#[tauri::command]
+pub fn get_autolaunch_enabled(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_autolaunch_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let al = app.autolaunch();
+    if enabled {
+        al.enable().map_err(|e| e.to_string())
+    } else {
+        al.disable().map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]

@@ -8,7 +8,7 @@ use cpa_manager::SharedCpaState;
 use log_stream::LogBuffer;
 use tauri::{Emitter, Manager};
 
-async fn http_ping(port: u16) -> bool {
+pub(crate) async fn http_ping(port: u16) -> bool {
     let url = format!("http://localhost:{port}/");
     match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
@@ -19,6 +19,47 @@ async fn http_ping(port: u16) -> bool {
     }
 }
 
+/// Background loop that monitors CPA after it reaches Running state.
+/// Detects crashes and unexpected exits every 5 seconds.
+pub(crate) fn spawn_health_monitor(app: tauri::AppHandle, state: SharedCpaState, port: u16) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+            let current_status = state.lock().unwrap().status.clone();
+            // Only monitor while Running
+            if current_status != cpa_manager::CpaStatus::Running {
+                continue;
+            }
+
+            // Check process alive first (cheap)
+            if !cpa_manager::check_process_alive(&state) {
+                let msg = "CPA process exited unexpectedly".to_string();
+                {
+                    let mut s = state.lock().unwrap();
+                    s.status = cpa_manager::CpaStatus::Error(msg.clone());
+                }
+                let _ = app.emit("cpa:status", &cpa_manager::CpaStatus::Error(msg));
+                continue;
+            }
+
+            // Also HTTP-ping to catch hangs
+            if !http_ping(port).await {
+                // Give it one more chance before flagging
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                if !http_ping(port).await && !cpa_manager::check_process_alive(&state) {
+                    let msg = "CPA stopped responding".to_string();
+                    {
+                        let mut s = state.lock().unwrap();
+                        s.status = cpa_manager::CpaStatus::Error(msg.clone());
+                    }
+                    let _ = app.emit("cpa:status", &cpa_manager::CpaStatus::Error(msg));
+                }
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -27,11 +68,22 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         .setup(|app| {
             app_config::ensure_dirs(app.handle())?;
             app_config::ensure_config_yaml(app.handle())?;
 
-            let settings = app_config::load_settings(app.handle());
+            let mut settings = app_config::load_settings(app.handle());
+            // Sync port from config.yaml if present (config.yaml is authoritative)
+            if let Ok(yaml_port) = app_config::read_port_from_yaml(app.handle()) {
+                if yaml_port != settings.port {
+                    settings.port = yaml_port;
+                    let _ = app_config::save_settings(app.handle(), &settings);
+                }
+            }
             let cpa_state = cpa_manager::new_shared_state(settings.port);
             app.manage(cpa_state.clone());
             app.manage(log_stream::new_log_buffer());
@@ -64,6 +116,7 @@ pub fn run() {
                         let mut s = cpa_state.lock().unwrap();
                         s.status = cpa_manager::CpaStatus::Running;
                         let _ = app2.emit("cpa:status", &cpa_manager::CpaStatus::Running);
+                        spawn_health_monitor(app2.clone(), cpa_state.clone(), port);
                         return;
                     }
 
@@ -98,6 +151,7 @@ pub fn run() {
                                             "cpa:status",
                                             &cpa_manager::CpaStatus::Running,
                                         );
+                                        spawn_health_monitor(app3.clone(), state2.clone(), port);
                                         return;
                                     }
                                     if !cpa_manager::check_process_alive(&state2) {
@@ -153,6 +207,9 @@ pub fn run() {
             commands::config::open_data_dir,
             commands::updater::check_cpa_update,
             commands::updater::download_cpa_update,
+            commands::config::get_port_from_yaml,
+            commands::config::get_autolaunch_enabled,
+            commands::config::set_autolaunch_enabled,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")

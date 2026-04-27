@@ -1,6 +1,7 @@
 use crate::app_config;
+use crate::cpa_manager::SharedCpaState;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,6 +114,13 @@ pub async fn download_cpa_update(
         }
     }
 
+    // Ensure CPA is fully stopped before replacing binary (critical on Windows)
+    if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
+        crate::cpa_manager::kill_cpa(&cpa_state);
+        // Give OS time to release file locks
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
+
     let bin_dir = app_config::bin_dir(&app);
     std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
 
@@ -121,6 +129,17 @@ pub async fn download_cpa_update(
     } else {
         "cli-proxy-api"
     };
+
+    // On Windows, rename the old binary before overwriting (avoids EBUSY/EACCES)
+    #[cfg(target_os = "windows")]
+    {
+        let old_path = bin_dir.join(binary_name);
+        if old_path.exists() {
+            let backup = bin_dir.join("cli-proxy-api.exe.old");
+            let _ = std::fs::remove_file(&backup); // remove stale backup
+            let _ = std::fs::rename(&old_path, &backup);
+        }
+    }
 
     if download_url.ends_with(".zip") {
         extract_zip(&buf, binary_name, &bin_dir)?;

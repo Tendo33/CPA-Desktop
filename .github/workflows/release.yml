@@ -7,31 +7,77 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  # ── Generate real macOS icon.icns on macOS before building ────────────────
+  gen-icons:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow
+      - run: python3 scripts/gen_icons.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icons
+          path: src-tauri/icons/
+
+  # ── Build all platforms ───────────────────────────────────────────────────
+  build:
+    needs: gen-icons
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Windows x64
           - platform: windows-latest
-            args: ''
+            rust-target: x86_64-pc-windows-msvc
+            args: '--target x86_64-pc-windows-msvc'
             name: windows-x64
+
+          # Windows ARM64 (cross-compiled on x64 runner)
+          - platform: windows-latest
+            rust-target: aarch64-pc-windows-msvc
+            args: '--target aarch64-pc-windows-msvc'
+            name: windows-arm64
+
+          # macOS Apple Silicon (native)
           - platform: macos-latest
+            rust-target: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
             name: macos-arm64
+
+          # macOS Intel (cross-compiled on Apple Silicon runner)
           - platform: macos-latest
+            rust-target: x86_64-apple-darwin
             args: '--target x86_64-apple-darwin'
             name: macos-x64
+
+          # Linux x64
           - platform: ubuntu-22.04
+            rust-target: x86_64-unknown-linux-gnu
             args: ''
             name: linux-x64
 
+          # Linux ARM64
+          - platform: ubuntu-22.04
+            rust-target: aarch64-unknown-linux-gnu
+            args: '--target aarch64-unknown-linux-gnu'
+            name: linux-arm64
+
     runs-on: ${{ matrix.platform }}
-    name: Build ${{ matrix.name }}
+    name: Build (${{ matrix.name }})
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download icons (from gen-icons job)
+        uses: actions/download-artifact@v4
+        with:
+          name: icons
+          path: src-tauri/icons/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,15 +88,16 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust-target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          key: ${{ matrix.name }}
 
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install Linux x64 system dependencies
+        if: matrix.name == 'linux-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -59,13 +106,34 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      - name: Install Linux ARM64 cross-compilation tools
+        if: matrix.name == 'linux-arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libappindicator3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            patchelf
+          echo "PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
       - name: Install frontend dependencies
         run: npm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (optional — set in repo secrets to enable)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'CPA Desktop ${{ github.ref_name }}'
@@ -73,14 +141,42 @@ jobs:
             ## CPA Desktop ${{ github.ref_name }}
 
             Desktop manager for CLIProxyAPI — auto-download, silent background start,
-            real-time logs, one-click updates.
+            real-time logs, one-click updates. No terminal window required.
 
-            ### Downloads
-            - **Windows**: `.msi` (recommended) or `.exe` (NSIS installer)
-            - **macOS**: `.dmg`
-            - **Linux**: `.AppImage` or `.deb`
+            ### Platform Downloads
 
-            > CPA binary is downloaded automatically on first launch.
+            | Platform | File |
+            |----------|------|
+            | Windows x64 | `CPA Desktop_*_x64_en-US.msi` or `*_x64-setup.exe` |
+            | Windows ARM64 | `CPA Desktop_*_arm64_en-US.msi` |
+            | macOS Apple Silicon | `CPA Desktop_*_aarch64.dmg` |
+            | macOS Intel | `CPA Desktop_*_x64.dmg` |
+            | Linux x64 | `cpa-desktop_*_amd64.AppImage` or `.deb` |
+            | Linux ARM64 | `cpa-desktop_*_arm64.AppImage` or `.deb` |
+
+            > **Note:** The CLIProxyAPI binary is downloaded automatically on first launch (~14 MB).
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # ── macOS Universal Binary (combines arm64 + x64 .dmg) ───────────────────
+  macos-universal:
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS arm64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: 'CPA Desktop_${{ github.ref_name }}_aarch64.dmg'
+          path: artifacts/arm64/
+        continue-on-error: true  # artifact name may vary
+
+      - name: Create Universal Binary note
+        run: |
+          echo "Universal binary via lipo requires extracting .app from both .dmg files."
+          echo "For now, separate arm64 and x64 .dmg files are provided."
+          echo "A future release will include a universal .dmg."

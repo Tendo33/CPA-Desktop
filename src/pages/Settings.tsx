@@ -7,6 +7,9 @@ import {
   openDataDir,
   stopCpa,
   startCpa,
+  getPortFromYaml,
+  getAutolaunchEnabled,
+  setAutolaunchEnabled,
   type AppSettings,
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
@@ -19,17 +22,29 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [yamlError, setYamlError] = useState('')
   const [msg, setMsg] = useState('')
+  const [autolaunch, setAutolaunch] = useState(false)
+  const [yamlPort, setYamlPort] = useState<number | null>(null)
 
   useEffect(() => {
     getSettings().then(setSettings)
-    readConfigYaml()
-      .then(setYaml)
-      .catch(() => {})
+    readConfigYaml().then(setYaml).catch(() => {})
+    getAutolaunchEnabled().then(setAutolaunch).catch(() => {})
+    getPortFromYaml().then(setYamlPort).catch(() => {})
   }, [])
 
   const flash = (m: string) => {
     setMsg(m)
     setTimeout(() => setMsg(''), 2500)
+  }
+
+  const handleAutolaunchChange = async (checked: boolean) => {
+    try {
+      await setAutolaunchEnabled(checked)
+      setAutolaunch(checked)
+      flash(checked ? 'Will launch on system login' : 'Removed from startup')
+    } catch (e) {
+      flash(`Error: ${e}`)
+    }
   }
 
   const handleSaveSettings = async () => {
@@ -90,7 +105,14 @@ export function SettingsPage() {
                 }
                 className="h-7 text-xs bg-zinc-900 border border-zinc-700 rounded px-2 text-zinc-200 outline-none focus:border-zinc-500 w-24"
               />
-              <span className="text-xs text-zinc-600">default: 8317</span>
+              {yamlPort !== null && yamlPort !== settings.port && (
+                <span className="text-xs text-yellow-500">
+                  config.yaml uses port {yamlPort} — edit config.yaml to change
+                </span>
+              )}
+              {yamlPort === settings.port && (
+                <span className="text-xs text-zinc-600">synced with config.yaml</span>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
@@ -107,9 +129,24 @@ export function SettingsPage() {
                   className="w-3.5 h-3.5 accent-blue-500"
                 />
                 <span className="text-xs text-zinc-300">
-                  Launch CPA when app opens
+                  Auto-start CPA when app opens
                 </span>
               </label>
+
+            <div className="flex items-center gap-4">
+              <label className="text-xs text-zinc-400 w-28 shrink-0">System Login</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autolaunch}
+                  onChange={(e) => handleAutolaunchChange(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-blue-500"
+                />
+                <span className="text-xs text-zinc-300">
+                  Launch CPA Desktop on system login
+                </span>
+              </label>
+            </div>
             </div>
 
             <div className="flex items-center gap-3 pt-1">
