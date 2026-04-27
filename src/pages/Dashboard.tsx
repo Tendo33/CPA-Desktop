@@ -1,8 +1,13 @@
 import { useRef } from 'react'
 import { CpaWebView, type CpaWebViewHandle } from '@/components/CpaWebView'
 import { useCpaStore } from '@/stores/cpa'
-import { startCpa } from '@/lib/tauri'
-import { isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
+import {
+  getSettings,
+  saveSettings,
+  startCpa,
+  writeConfigYamlPort,
+} from '@/lib/tauri'
+import { errorOf, isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
 
 export function Dashboard() {
@@ -16,6 +21,21 @@ export function Dashboard() {
   const idle     = isIdle(status)
   const stopped  = isStopped(status)
   const showOverlay = !running
+  const errMsg = errorOf(status)
+  const portInUseMatch = errMsg ? /^port_in_use:(\d+)$/.exec(errMsg) : null
+
+  const handleRetryNextPort = async () => {
+    if (!portInUseMatch) return
+    const next = Number(portInUseMatch[1]) + 1
+    try {
+      const current = await getSettings()
+      await saveSettings({ ...current, port: next })
+      await writeConfigYamlPort(next)
+      await startCpa()
+    } catch (e) {
+      console.error('retry next port failed', e)
+    }
+  }
 
   const managementUrl = `http://localhost:${port}/management.html#/quota`
 
@@ -117,7 +137,7 @@ export function Dashboard() {
               <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text-1)' }}>
                 {error ? t.dashboard.stoppedUnexpectedly : t.dashboard.notRunning}
               </p>
-              {error && status.kind === 'Error' && (
+              {error && status.kind === 'Error' && !portInUseMatch && (
                 <p
                   className="selectable"
                   style={{ fontSize: 11, color: 'var(--c-err)', maxWidth: 320, opacity: 0.85 }}
@@ -125,15 +145,33 @@ export function Dashboard() {
                   {status.data}
                 </p>
               )}
+              {portInUseMatch && (
+                <p
+                  className="selectable"
+                  style={{ fontSize: 11, color: 'var(--c-err)', maxWidth: 320, opacity: 0.85 }}
+                >
+                  Port {portInUseMatch[1]} is already in use.
+                </p>
+              )}
             </div>
 
-            <button
-              onClick={() => startCpa()}
-              className="btn btn-primary"
-              style={{ fontSize: 13, padding: '7px 20px' }}
-            >
-              {error ? t.dashboard.restartCpa : t.dashboard.startCpa}
-            </button>
+            {portInUseMatch ? (
+              <button
+                onClick={handleRetryNextPort}
+                className="btn btn-primary"
+                style={{ fontSize: 13, padding: '7px 20px' }}
+              >
+                Try port {Number(portInUseMatch[1]) + 1}
+              </button>
+            ) : (
+              <button
+                onClick={() => startCpa()}
+                className="btn btn-primary"
+                style={{ fontSize: 13, padding: '7px 20px' }}
+              >
+                {error ? t.dashboard.restartCpa : t.dashboard.startCpa}
+              </button>
+            )}
           </div>
         </Overlay>
       )}

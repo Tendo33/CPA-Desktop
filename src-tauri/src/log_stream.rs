@@ -37,11 +37,16 @@ pub fn get_all(buf: &LogBuffer) -> Vec<LogLine> {
 }
 
 /// Spawn threads to read stdout and stderr from a process and emit events.
+/// When a stderr line matches an "address already in use" pattern, emits a
+/// structured `CpaStatus::Error("port_in_use:{port}")` so the UI can offer
+/// an automatic port +1 retry.
 pub fn pipe_process_output(
     app: AppHandle,
     buf: LogBuffer,
     stdout: std::process::ChildStdout,
     stderr: std::process::ChildStderr,
+    port: u16,
+    cpa_state: crate::cpa_manager::SharedCpaState,
 ) {
     let app1 = app.clone();
     let buf1 = buf.clone();
@@ -63,6 +68,14 @@ pub fn pipe_process_output(
     std::thread::spawn(move || {
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             append(&buf2, "stderr", line.clone());
+            let lower = line.to_lowercase();
+            if lower.contains("address already in use") || lower.contains("bind: only one usage") {
+                let msg = format!("port_in_use:{port}");
+                if let Ok(mut s) = cpa_state.lock() {
+                    s.status = crate::cpa_manager::CpaStatus::Error(msg.clone());
+                }
+                let _ = app.emit("cpa:status", &crate::cpa_manager::CpaStatus::Error(msg));
+            }
             let _ = app.emit(
                 "cpa:log",
                 LogLine {

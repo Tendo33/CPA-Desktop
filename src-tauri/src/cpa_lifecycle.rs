@@ -33,7 +33,14 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
         let _ = app.emit("cpa:status", &CpaStatus::Error(e.clone()));
     })?;
     let _ = app.emit("cpa:status", &CpaStatus::Starting);
-    pipe_process_output(app.clone(), log_buf, output.stdout, output.stderr);
+    pipe_process_output(
+        app.clone(),
+        log_buf,
+        output.stdout,
+        output.stderr,
+        port,
+        cpa_state.clone(),
+    );
 
     let app2 = app.clone();
     let state2 = cpa_state.clone();

@@ -55,6 +55,27 @@ pub fn write_config_yaml(app: AppHandle, content: String) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub fn write_config_yaml_port(app: AppHandle, port: u16) -> Result<(), String> {
+    let path = app_config::config_yaml_path(&app);
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut value: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
+    } else {
+        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
+    };
+    if let Some(map) = value.as_mapping_mut() {
+        map.insert(
+            serde_yaml::Value::String("port".into()),
+            serde_yaml::Value::Number(serde_yaml::Number::from(port)),
+        );
+    } else {
+        return Err("config.yaml root is not a mapping".into());
+    }
+    let serialized = serde_yaml::to_string(&value).map_err(|e| e.to_string())?;
+    std::fs::write(&path, serialized).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn open_data_dir(app: AppHandle) -> Result<(), String> {
     let dir = app_config::data_dir(&app);
     #[cfg(target_os = "windows")]

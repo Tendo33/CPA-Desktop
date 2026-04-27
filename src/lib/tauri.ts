@@ -49,6 +49,8 @@ export const saveSettings = (settings: AppSettings) =>
 export const readConfigYaml = () => invoke<string>('read_config_yaml')
 export const writeConfigYaml = (content: string) =>
   invoke<void>('write_config_yaml', { content })
+export const writeConfigYamlPort = (port: number) =>
+  invoke<void>('write_config_yaml_port', { port })
 export const openDataDir = () => invoke<void>('open_data_dir')
 export const getPortFromYaml = () => invoke<number>('get_port_from_yaml')
 export const getAutolaunchEnabled = () => invoke<boolean>('get_autolaunch_enabled')
