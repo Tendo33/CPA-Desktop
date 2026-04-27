@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Sidebar, type Page } from '@/components/Sidebar'
 import { StatusBar } from '@/components/StatusBar'
 import { FirstRunSetup } from '@/components/FirstRunSetup'
+import { Toaster } from '@/components/ui'
 import { Dashboard } from '@/pages/Dashboard'
 import { Logs } from '@/pages/Logs'
 import { SettingsPage } from '@/pages/Settings'
@@ -168,6 +169,7 @@ export default function App() {
         </main>
         <StatusBar />
       </div>
+      <Toaster />
     </div>
   )
 }
