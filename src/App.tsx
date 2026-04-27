@@ -11,6 +11,7 @@ import { useLogStore } from '@/stores/logs'
 import { useSettingsStore } from '@/stores/settings'
 import { cpaBinaryExists } from '@/lib/tauri'
 import type { UnlistenFn } from '@tauri-apps/api/event'
+import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
 
 export default function App() {
   const [page, setPage]               = useState<Page>('dashboard')
@@ -47,6 +48,31 @@ export default function App() {
     setPrevPage(page)
     setPage(p)
   }
+
+  useEffect(() => {
+    if (binaryReady !== true) return
+    let cancelled = false
+    const bindings: Array<[string, () => void]> = [
+      ['CmdOrCtrl+,', () => setPage('settings')],
+      ['CmdOrCtrl+L', () => setPage('logs')],
+    ]
+    void (async () => {
+      for (const [key, fn] of bindings) {
+        if (cancelled) return
+        try {
+          await register(key, fn)
+        } catch {
+          /* shortcut may already be registered by another app */
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+      bindings.forEach(([key]) => {
+        unregister(key).catch(() => {})
+      })
+    }
+  }, [binaryReady])
 
   if (binaryReady === null) {
     return (
