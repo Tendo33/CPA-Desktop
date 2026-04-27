@@ -11,6 +11,7 @@ export interface AppSettings {
   autoStart: boolean
   cpaVersion: string | null
   lastPanic?: LastPanic | null
+  autoCheckAppUpdates?: boolean
 }
 
 export interface UpdateCheckResult {
@@ -58,6 +59,19 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
 export const downloadCpaUpdate = (downloadUrl: string, version: string) =>
   invoke<void>('download_cpa_update', { downloadUrl, version })
+
+// App self-update (Tauri updater plugin)
+import { check, type Update } from '@tauri-apps/plugin-updater'
+import { relaunch } from '@tauri-apps/plugin-process'
+
+export async function checkAppUpdate(): Promise<Update | null> {
+  return await check()
+}
+
+export async function applyAppUpdate(update: Update): Promise<void> {
+  await update.downloadAndInstall()
+  await relaunch()
+}
 
 // Diagnostics
 export const reportFrontendError = (message: string, stack?: string) =>

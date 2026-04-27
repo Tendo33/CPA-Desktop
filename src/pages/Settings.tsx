@@ -10,6 +10,8 @@ import {
   getPortFromYaml,
   getAutolaunchEnabled,
   setAutolaunchEnabled,
+  checkAppUpdate,
+  applyAppUpdate,
   type AppSettings,
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
@@ -120,6 +122,7 @@ export function SettingsPage() {
   const [msg, setMsg]           = useState('')
   const [autolaunch, setAutolaunch] = useState(false)
   const [yamlPort, setYamlPort] = useState<number | null>(null)
+  const [updateMsg, setUpdateMsg] = useState('')
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -165,6 +168,25 @@ export function SettingsPage() {
       setYamlError(String(e))
     }
     setSaving(false)
+  }
+
+  const onCheckUpdate = async () => {
+    setUpdateMsg('Checking…')
+    try {
+      const u = await checkAppUpdate()
+      if (!u) {
+        setUpdateMsg('Up to date')
+        return
+      }
+      if (confirm(`Update ${u.version} available. Install now?`)) {
+        setUpdateMsg('Downloading…')
+        await applyAppUpdate(u)
+      } else {
+        setUpdateMsg(`v${u.version} available`)
+      }
+    } catch (e) {
+      setUpdateMsg(String(e))
+    }
   }
 
   const handleRestartCpa = async () => {
@@ -231,6 +253,24 @@ export function SettingsPage() {
 
           <Row label={t.settings.launchOnLogin} hint={t.settings.launchOnLoginHint}>
             <Toggle checked={autolaunch} onChange={handleAutolaunchChange} />
+          </Row>
+
+          <Row label="Check for app updates" hint={updateMsg || 'Tauri self-updater'}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={onCheckUpdate}
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              Check now
+            </button>
+          </Row>
+
+          <Row label="Auto-check on launch" hint="Once every 6 hours">
+            <Toggle
+              checked={settings.autoCheckAppUpdates ?? false}
+              onChange={(v) => setSettings({ ...settings, autoCheckAppUpdates: v })}
+            />
           </Row>
         </Section>
 

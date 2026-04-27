@@ -26,6 +26,8 @@ pub struct AppSettings {
     pub cpa_version: Option<String>,
     #[serde(default)]
     pub last_panic: Option<LastPanic>,
+    #[serde(default)]
+    pub auto_check_app_updates: bool,
 }
 
 impl Default for AppSettings {
@@ -33,9 +35,10 @@ impl Default for AppSettings {
         Self {
             schema_version: SETTINGS_SCHEMA_VERSION,
             port: DEFAULT_PORT,
-            auto_start: true,
+            auto_start: false,
             cpa_version: None,
             last_panic: None,
+            auto_check_app_updates: false,
         }
     }
 }

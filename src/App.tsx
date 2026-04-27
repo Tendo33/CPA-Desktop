@@ -9,8 +9,8 @@ import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
 import { useLogStore } from '@/stores/logs'
 import { useSettingsStore } from '@/stores/settings'
-import { cpaBinaryExists } from '@/lib/tauri'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+import { applyAppUpdate, checkAppUpdate, cpaBinaryExists, getSettings } from '@/lib/tauri'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
 
 export default function App() {
@@ -71,6 +71,57 @@ export default function App() {
       bindings.forEach(([key]) => {
         unregister(key).catch(() => {})
       })
+    }
+  }, [binaryReady])
+
+  useEffect(() => {
+    if (binaryReady !== true) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    void getSettings().then(async (s) => {
+      if (cancelled || !s.autoCheckAppUpdates) return
+      timer = setTimeout(async () => {
+        try {
+          const u = await checkAppUpdate()
+          if (u) {
+            const notif = await import('@tauri-apps/plugin-notification')
+            const granted = await notif.isPermissionGranted()
+            if (granted) {
+              await notif.sendNotification({
+                title: 'CPA Desktop update available',
+                body: `v${u.version}`,
+              })
+            }
+          }
+        } catch {
+          /* swallow */
+        }
+      }, 6 * 60 * 60 * 1000)
+    })
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [binaryReady])
+
+  useEffect(() => {
+    if (binaryReady !== true) return
+    let unlisten: UnlistenFn | null = null
+    void listen('app:check-updates', async () => {
+      try {
+        const u = await checkAppUpdate()
+        if (!u) return
+        if (confirm(`Update ${u.version} available. Install now?`)) {
+          await applyAppUpdate(u)
+        }
+      } catch {
+        /* swallow */
+      }
+    }).then((fn) => {
+      unlisten = fn
+    })
+    return () => {
+      unlisten?.()
     }
   }, [binaryReady])
 
