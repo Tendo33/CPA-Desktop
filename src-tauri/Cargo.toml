@@ -34,6 +34,7 @@ tar = "0.4"
 futures-util = "0.3"
 log = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
+tauri-plugin-window-state = "2.4.1"
 
 [profile.release]
 panic = "abort"
