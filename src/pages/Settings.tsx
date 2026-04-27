@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   getSettings,
   saveSettings,
@@ -20,6 +20,11 @@ import { useT } from '@/lib/i18n'
 import { Button, NumberInput, Row, Section, Toggle } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
 import { cn } from '@/lib/utils'
+import { useSettingsStore } from '@/stores/settings'
+
+const MonacoEditor = lazy(() =>
+  import('@monaco-editor/react').then((m) => ({ default: m.default })),
+)
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
@@ -34,6 +39,7 @@ export function SettingsPage() {
   const [yamlPort, setYamlPort] = useState<number | null>(null)
   const [updateMsg, setUpdateMsg] = useState('')
   const [configTab, setConfigTab] = useState<'form' | 'yaml'>('form')
+  const theme = useSettingsStore((s) => s.theme)
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -225,25 +231,25 @@ export function SettingsPage() {
                   {yamlError}
                 </div>
               )}
-              <textarea
-                value={yaml}
-                onChange={(e) => setYaml(e.target.value)}
-                spellCheck={false}
-                className="font-log"
-                style={{
-                  width: '100%',
-                  height: 320,
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '12px 14px',
-                  fontSize: 11,
-                  color: 'var(--c-text-2)',
-                  resize: 'vertical',
-                  outline: 'none',
-                  lineHeight: 1.7,
-                  display: 'block',
-                }}
-              />
+              <Suspense
+                fallback={
+                  <div className="text-xs text-text-3 px-3 py-4">Loading editor…</div>
+                }
+              >
+                <MonacoEditor
+                  height={320}
+                  language="yaml"
+                  theme={theme === 'light' ? 'vs' : 'vs-dark'}
+                  value={yaml}
+                  onChange={(v) => setYaml(v ?? '')}
+                  options={{
+                    fontSize: 12,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    tabSize: 2,
+                  }}
+                />
+              </Suspense>
             </div>
           )}
         </Section>
