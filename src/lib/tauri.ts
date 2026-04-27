@@ -51,6 +51,14 @@ export const writeConfigYaml = (content: string) =>
   invoke<void>('write_config_yaml', { content })
 export const writeConfigYamlPort = (port: number) =>
   invoke<void>('write_config_yaml_port', { port })
+export const readConfigField = <T = unknown>(path: string) =>
+  invoke<T | null>('read_config_field', { path })
+export const writeConfigField = (path: string, value: unknown) =>
+  invoke<void>('write_config_field', { path, value })
+export const listConfigBackups = () =>
+  invoke<string[]>('list_config_backups')
+export const restoreConfigBackup = (name: string) =>
+  invoke<string>('restore_config_backup', { name })
 export const openDataDir = () => invoke<void>('open_data_dir')
 export const getPortFromYaml = () => invoke<number>('get_port_from_yaml')
 export const getAutolaunchEnabled = () => invoke<boolean>('get_autolaunch_enabled')

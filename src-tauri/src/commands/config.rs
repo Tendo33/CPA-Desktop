@@ -107,6 +107,73 @@ pub fn restore_config_backup(app: AppHandle, name: String) -> Result<String, Str
     std::fs::read_to_string(&dst).map_err(|e| e.to_string())
 }
 
+fn set_path(
+    doc: &mut serde_yaml::Value,
+    path: &str,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
+    if parts.is_empty() {
+        return Err("empty path".into());
+    }
+    let mut cur = doc;
+    for p in &parts[..parts.len() - 1] {
+        let map = cur
+            .as_mapping_mut()
+            .ok_or_else(|| format!("'{p}' is not a mapping"))?;
+        let key = serde_yaml::Value::String((*p).to_string());
+        if !map.contains_key(&key) {
+            map.insert(key.clone(), serde_yaml::Value::Mapping(Default::default()));
+        }
+        cur = map.get_mut(&key).unwrap();
+    }
+    let last = *parts.last().unwrap();
+    let map = cur
+        .as_mapping_mut()
+        .ok_or_else(|| "leaf parent is not a mapping".to_string())?;
+    map.insert(
+        serde_yaml::Value::String(last.to_string()),
+        serde_yaml::to_value(&value).map_err(|e| e.to_string())?,
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_config_field(
+    app: AppHandle,
+    path: String,
+) -> Result<Option<serde_json::Value>, String> {
+    let raw = read_config_yaml(app)?;
+    let doc: serde_yaml::Value =
+        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?;
+    let mut cur = &doc;
+    for p in path.split('.').filter(|p| !p.is_empty()) {
+        let Some(map) = cur.as_mapping() else { return Ok(None) };
+        let Some(next) = map.get(serde_yaml::Value::String(p.to_string())) else {
+            return Ok(None);
+        };
+        cur = next;
+    }
+    Ok(Some(serde_json::to_value(cur).map_err(|e| e.to_string())?))
+}
+
+#[tauri::command]
+pub fn write_config_field(
+    app: AppHandle,
+    path: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let raw = read_config_yaml(app.clone()).unwrap_or_default();
+    let mut doc: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(Default::default())
+    } else {
+        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
+    };
+    set_path(&mut doc, &path, value)?;
+    let out = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
+    write_config_yaml(app, out)
+}
+
 #[tauri::command]
 pub fn write_config_yaml_port(app: AppHandle, port: u16) -> Result<(), String> {
     let path = app_config::config_yaml_path(&app);

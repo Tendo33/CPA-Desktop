@@ -18,6 +18,8 @@ import { useCpaStore } from '@/stores/cpa'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 import { Button, NumberInput, Row, Section, Toggle } from '@/components/ui'
+import { ConfigForm } from '@/components/ConfigForm'
+import { cn } from '@/lib/utils'
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
@@ -31,6 +33,7 @@ export function SettingsPage() {
   const [autolaunch, setAutolaunch] = useState(false)
   const [yamlPort, setYamlPort] = useState<number | null>(null)
   const [updateMsg, setUpdateMsg] = useState('')
+  const [configTab, setConfigTab] = useState<'form' | 'yaml'>('form')
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -180,45 +183,69 @@ export function SettingsPage() {
         <Section
           title={t.settings.configYaml}
           action={
-            <Button onClick={handleSaveYaml} disabled={saving} size="sm">
-              {t.settings.saveApply}
-            </Button>
+            <div className="flex gap-1 items-center">
+              <div className="flex gap-0.5 p-0.5 bg-raised rounded border border-border">
+                {(['form', 'yaml'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setConfigTab(tab)}
+                    className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded border-0 cursor-pointer transition-colors uppercase tracking-wider',
+                      configTab === tab
+                        ? 'bg-hover text-text-1 font-semibold'
+                        : 'bg-transparent text-text-3 hover:text-text-2',
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              {configTab === 'yaml' && (
+                <Button onClick={handleSaveYaml} disabled={saving} size="sm">
+                  {t.settings.saveApply}
+                </Button>
+              )}
+            </div>
           }
         >
-          <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
-            {yamlError && (
-              <div
+          {configTab === 'form' ? (
+            <ConfigForm />
+          ) : (
+            <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
+              {yamlError && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderBottom: '1px solid oklch(28% 0.08 22)',
+                    background: 'var(--c-err-bg)',
+                    fontSize: 11,
+                    color: 'var(--c-err)',
+                  }}
+                >
+                  {yamlError}
+                </div>
+              )}
+              <textarea
+                value={yaml}
+                onChange={(e) => setYaml(e.target.value)}
+                spellCheck={false}
+                className="font-log"
                 style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid oklch(28% 0.08 22)',
-                  background: 'var(--c-err-bg)',
+                  width: '100%',
+                  height: 320,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '12px 14px',
                   fontSize: 11,
-                  color: 'var(--c-err)',
+                  color: 'var(--c-text-2)',
+                  resize: 'vertical',
+                  outline: 'none',
+                  lineHeight: 1.7,
+                  display: 'block',
                 }}
-              >
-                {yamlError}
-              </div>
-            )}
-            <textarea
-              value={yaml}
-              onChange={(e) => setYaml(e.target.value)}
-              spellCheck={false}
-              className="font-log"
-              style={{
-                width: '100%',
-                height: 320,
-                background: 'transparent',
-                border: 'none',
-                padding: '12px 14px',
-                fontSize: 11,
-                color: 'var(--c-text-2)',
-                resize: 'vertical',
-                outline: 'none',
-                lineHeight: 1.7,
-                display: 'block',
-              }}
-            />
-          </div>
+              />
+            </div>
+          )}
         </Section>
 
         <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>
