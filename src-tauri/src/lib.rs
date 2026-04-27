@@ -4,19 +4,25 @@ pub mod cpa_manager;
 pub mod log_stream;
 pub mod tray;
 
+use std::sync::OnceLock;
+
 use cpa_manager::SharedCpaState;
 use log_stream::LogBuffer;
 use tauri::{Emitter, Manager};
 
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(2))
+            .build()
+            .expect("reqwest client")
+    })
+}
+
 pub(crate) async fn http_ping(port: u16) -> bool {
     let url = format!("http://localhost:{port}/");
-    match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-    {
-        Ok(client) => client.get(&url).send().await.is_ok(),
-        Err(_) => false,
-    }
+    http_client().get(&url).send().await.is_ok()
 }
 
 /// Background loop that monitors CPA after it reaches Running state.
@@ -27,12 +33,12 @@ pub(crate) fn spawn_health_monitor(app: tauri::AppHandle, state: SharedCpaState,
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
             let current_status = state.lock().unwrap().status.clone();
-            // Only monitor while Running
-            if current_status != cpa_manager::CpaStatus::Running {
-                continue;
+            match current_status {
+                cpa_manager::CpaStatus::Running => {}
+                cpa_manager::CpaStatus::Stopped | cpa_manager::CpaStatus::Idle => return,
+                _ => continue,
             }
 
-            // Check process alive first (cheap)
             if !cpa_manager::check_process_alive(&state) {
                 let msg = "CPA process exited unexpectedly".to_string();
                 {
@@ -40,12 +46,10 @@ pub(crate) fn spawn_health_monitor(app: tauri::AppHandle, state: SharedCpaState,
                     s.status = cpa_manager::CpaStatus::Error(msg.clone());
                 }
                 let _ = app.emit("cpa:status", &cpa_manager::CpaStatus::Error(msg));
-                continue;
+                return;
             }
 
-            // Also HTTP-ping to catch hangs
             if !http_ping(port).await {
-                // Give it one more chance before flagging
                 tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                 if !http_ping(port).await && !cpa_manager::check_process_alive(&state) {
                     let msg = "CPA stopped responding".to_string();
@@ -54,6 +58,7 @@ pub(crate) fn spawn_health_monitor(app: tauri::AppHandle, state: SharedCpaState,
                         s.status = cpa_manager::CpaStatus::Error(msg.clone());
                     }
                     let _ = app.emit("cpa:status", &cpa_manager::CpaStatus::Error(msg));
+                    return;
                 }
             }
         }
