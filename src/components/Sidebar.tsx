@@ -1,5 +1,5 @@
 import { LayoutDashboard, ScrollText, Settings, Info, Sun, Moon } from 'lucide-react'
-import { useSettingsStore, type Theme, type Lang } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 import { useT } from '@/lib/i18n'
 
 export type Page = 'dashboard' | 'logs' | 'settings' | 'about'

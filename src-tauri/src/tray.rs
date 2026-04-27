@@ -10,12 +10,8 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItemBuilder::new("Open Dashboard")
         .id("show")
         .build(app)?;
-    let start = MenuItemBuilder::new("Start CPA")
-        .id("start")
-        .build(app)?;
-    let stop = MenuItemBuilder::new("Stop CPA")
-        .id("stop")
-        .build(app)?;
+    let start = MenuItemBuilder::new("Start CPA").id("start").build(app)?;
+    let stop = MenuItemBuilder::new("Stop CPA").id("stop").build(app)?;
     let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
     let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItemBuilder::new("Quit CPA Desktop")
@@ -121,7 +117,12 @@ async fn tray_start_cpa(app: AppHandle) {
     match crate::cpa_manager::spawn_cpa(&binary, &working_dir, &cpa_state) {
         Ok(output) => {
             let _ = app.emit("cpa:status", &CpaStatus::Starting);
-            crate::log_stream::pipe_process_output(app.clone(), log_buf, output.stdout, output.stderr);
+            crate::log_stream::pipe_process_output(
+                app.clone(),
+                log_buf,
+                output.stdout,
+                output.stderr,
+            );
 
             let app2 = app.clone();
             let state2 = cpa_state.clone();

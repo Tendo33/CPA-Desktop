@@ -76,10 +76,8 @@ pub fn ensure_dirs(app: &tauri::AppHandle) -> Result<(), String> {
 
 /// Read the port value from config.yaml (single source of truth).
 pub fn read_port_from_yaml(app: &tauri::AppHandle) -> Result<u16, String> {
-    let content = std::fs::read_to_string(config_yaml_path(app))
-        .map_err(|e| e.to_string())?;
-    let val: serde_yaml::Value = serde_yaml::from_str(&content)
-        .map_err(|e| e.to_string())?;
+    let content = std::fs::read_to_string(config_yaml_path(app)).map_err(|e| e.to_string())?;
+    let val: serde_yaml::Value = serde_yaml::from_str(&content).map_err(|e| e.to_string())?;
     val.get("port")
         .and_then(|v| v.as_u64())
         .map(|p| p as u16)

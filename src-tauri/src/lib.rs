@@ -140,17 +140,12 @@ pub fn run() {
                             let state2 = cpa_state.clone();
                             tauri::async_runtime::spawn(async move {
                                 for _ in 0..30u32 {
-                                    tokio::time::sleep(
-                                        tokio::time::Duration::from_secs(1),
-                                    )
-                                    .await;
+                                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                                     if http_ping(port).await {
                                         let mut s = state2.lock().unwrap();
                                         s.status = cpa_manager::CpaStatus::Running;
-                                        let _ = app3.emit(
-                                            "cpa:status",
-                                            &cpa_manager::CpaStatus::Running,
-                                        );
+                                        let _ = app3
+                                            .emit("cpa:status", &cpa_manager::CpaStatus::Running);
                                         spawn_health_monitor(app3.clone(), state2.clone(), port);
                                         return;
                                     }
@@ -158,9 +153,7 @@ pub fn run() {
                                         let msg = "CPA process exited".to_string();
                                         {
                                             let mut s = state2.lock().unwrap();
-                                            s.status = cpa_manager::CpaStatus::Error(
-                                                msg.clone(),
-                                            );
+                                            s.status = cpa_manager::CpaStatus::Error(msg.clone());
                                         }
                                         let _ = app3.emit(
                                             "cpa:status",
@@ -172,18 +165,14 @@ pub fn run() {
                                 let msg = "CPA failed to start within 30s".to_string();
                                 {
                                     let mut s = state2.lock().unwrap();
-                                    s.status =
-                                        cpa_manager::CpaStatus::Error(msg.clone());
+                                    s.status = cpa_manager::CpaStatus::Error(msg.clone());
                                 }
-                                let _ = app3.emit(
-                                    "cpa:status",
-                                    &cpa_manager::CpaStatus::Error(msg),
-                                );
+                                let _ =
+                                    app3.emit("cpa:status", &cpa_manager::CpaStatus::Error(msg));
                             });
                         }
                         Err(e) => {
-                            let _ =
-                                app2.emit("cpa:status", &cpa_manager::CpaStatus::Error(e));
+                            let _ = app2.emit("cpa:status", &cpa_manager::CpaStatus::Error(e));
                         }
                     }
                 });

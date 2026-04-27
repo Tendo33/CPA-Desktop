@@ -25,7 +25,11 @@ fn asset_name(version: &str) -> String {
         "aarch64" => "arm64",
         other => other,
     };
-    let ext = if cfg!(target_os = "windows") { "zip" } else { "tar.gz" };
+    let ext = if cfg!(target_os = "windows") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
     let ver = version.trim_start_matches('v');
     format!("CLIProxyAPI_{ver}_{os}_{arch}.{ext}")
 }

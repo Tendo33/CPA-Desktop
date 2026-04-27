@@ -1,8 +1,8 @@
+use chrono::Utc;
+use serde::Serialize;
 use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
-use chrono::Utc;
-use serde::Serialize;
 
 const RING_SIZE: usize = 2000;
 
@@ -46,25 +46,31 @@ pub fn pipe_process_output(
     let app1 = app.clone();
     let buf1 = buf.clone();
     std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             append(&buf1, "stdout", line.clone());
-            let _ = app1.emit("cpa:log", LogLine {
-                ts: Utc::now().to_rfc3339(),
-                level: "stdout".into(),
-                text: line,
-            });
+            let _ = app1.emit(
+                "cpa:log",
+                LogLine {
+                    ts: Utc::now().to_rfc3339(),
+                    level: "stdout".into(),
+                    text: line,
+                },
+            );
         }
     });
 
     let buf2 = buf;
     std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             append(&buf2, "stderr", line.clone());
-            let _ = app.emit("cpa:log", LogLine {
-                ts: Utc::now().to_rfc3339(),
-                level: "stderr".into(),
-                text: line,
-            });
+            let _ = app.emit(
+                "cpa:log",
+                LogLine {
+                    ts: Utc::now().to_rfc3339(),
+                    level: "stderr".into(),
+                    text: line,
+                },
+            );
         }
     });
 }

@@ -213,6 +213,25 @@ CPA Desktop 当前（commit `9330c78`）功能上已显著领先参考项目 [eN
 
 ---
 
+## 5b. 全局硬约束：CI 必须始终为绿
+
+每个 PR / 每次 push 到 `main` 都必须满足下述全部条件，缺一不可：
+
+- `npm run lint` 0 error
+- `npm run typecheck` 0 error
+- `npm run test:run` 全部通过
+- `npm run build` 成功
+- `cargo fmt --check` 通过
+- `cargo test --manifest-path src-tauri/Cargo.toml` 全部通过
+- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` 0 warning
+- 三平台（windows-latest / macos-latest / ubuntu-22.04）矩阵均 pass
+
+**任务执行原则**：
+1. 每完成一个子任务前，本地必须先跑过等价命令（前端 + Rust 全套）；不绿不提交。
+2. 引入新 lint/test 规则时，**必须先把现存违规清零再开启 `-D warnings` / 阻断模式**，避免引入即红。
+3. 如果某项检查暂时无法满足（例如 clippy 有合理误报），用最小作用域 `#[allow(...)]` 或 `eslint-disable-next-line` 加注释说明，**不允许全局禁用规则**。
+4. Phase 2 第 1 周首日先跑一次 baseline，把现存 clippy/tsc warnings 清零作为"零号任务"。
+
 ## 6. 决策记录
 
 - **Q-A**（签名密钥）：选 **3** —— 先做 Tauri updater 公私钥（免费），代码签名延后。

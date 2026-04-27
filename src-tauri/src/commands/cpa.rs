@@ -16,10 +16,7 @@ async fn ping(port: u16) -> bool {
 }
 
 #[tauri::command]
-pub async fn start_cpa(
-    app: AppHandle,
-    state: State<'_, SharedCpaState>,
-) -> Result<(), String> {
+pub async fn start_cpa(app: AppHandle, state: State<'_, SharedCpaState>) -> Result<(), String> {
     let port = {
         let s = state.lock().unwrap();
         match s.status {

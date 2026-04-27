@@ -26,9 +26,7 @@ pub fn get_port_from_yaml(app: AppHandle) -> Result<u16, String> {
 
 #[tauri::command]
 pub fn get_autolaunch_enabled(app: AppHandle) -> Result<bool, String> {
-    app.autolaunch()
-        .is_enabled()
-        .map_err(|e| e.to_string())
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
