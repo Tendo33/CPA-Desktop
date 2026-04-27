@@ -9,6 +9,7 @@ import {
 } from '@/lib/tauri'
 import { errorOf, isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
+import { Button } from '@/components/ui'
 
 export function Dashboard() {
   const { status, port } = useCpaStore()
@@ -105,13 +106,9 @@ export function Dashboard() {
               </p>
             </div>
 
-            <button
-              onClick={() => startCpa()}
-              className="btn btn-primary"
-              style={{ fontSize: 13, padding: '7px 20px' }}
-            >
+            <Button onClick={() => startCpa()} size="lg">
               {t.dashboard.startCpa}
-            </button>
+            </Button>
           </div>
         </Overlay>
       )}
@@ -156,21 +153,13 @@ export function Dashboard() {
             </div>
 
             {portInUseMatch ? (
-              <button
-                onClick={handleRetryNextPort}
-                className="btn btn-primary"
-                style={{ fontSize: 13, padding: '7px 20px' }}
-              >
+              <Button onClick={handleRetryNextPort} size="lg">
                 Try port {Number(portInUseMatch[1]) + 1}
-              </button>
+              </Button>
             ) : (
-              <button
-                onClick={() => startCpa()}
-                className="btn btn-primary"
-                style={{ fontSize: 13, padding: '7px 20px' }}
-              >
+              <Button onClick={() => startCpa()} size="lg">
                 {error ? t.dashboard.restartCpa : t.dashboard.startCpa}
-              </button>
+              </Button>
             )}
           </div>
         </Overlay>

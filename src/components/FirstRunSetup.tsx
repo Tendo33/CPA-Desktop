@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { checkCpaUpdate, downloadCpaUpdate, type UpdateCheckResult } from '@/lib/tauri'
 import { listen } from '@tauri-apps/api/event'
 import { useT } from '@/lib/i18n'
+import { Button } from '@/components/ui'
 
 interface Props {
   onComplete: () => void
@@ -139,13 +140,9 @@ export function FirstRunSetup({ onComplete }: Props) {
               </span>
             </div>
 
-            <button
-              onClick={handleDownload}
-              className="btn btn-primary"
-              style={{ fontSize: 13, padding: '9px 28px', width: '100%', justifyContent: 'center' }}
-            >
+            <Button onClick={handleDownload} size="lg" className="w-full justify-center">
               {t.firstRun.downloadBtn}
-            </button>
+            </Button>
           </div>
         )}
 
