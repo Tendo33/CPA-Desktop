@@ -1,13 +1,12 @@
 import { LayoutDashboard, ScrollText, Settings, Info } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 export type Page = 'dashboard' | 'logs' | 'settings' | 'about'
 
-const items: { id: Page; label: string; icon: React.ElementType }[] = [
+const NAV: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'logs', label: 'Logs', icon: ScrollText },
-  { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'about', label: 'About', icon: Info },
+  { id: 'logs',      label: 'Logs',      icon: ScrollText },
+  { id: 'settings',  label: 'Settings',  icon: Settings },
+  { id: 'about',     label: 'About',     icon: Info },
 ]
 
 interface Props {
@@ -17,23 +16,84 @@ interface Props {
 
 export function Sidebar({ current, onChange }: Props) {
   return (
-    <nav className="flex flex-col w-14 bg-zinc-900 border-r border-zinc-800 py-2 gap-0.5 shrink-0">
-      {items.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          title={label}
-          onClick={() => onChange(id)}
-          className={cn(
-            'flex flex-col items-center justify-center h-12 w-full gap-0.5 text-[9px] font-medium transition-colors cursor-pointer',
-            current === id
-              ? 'text-white bg-zinc-700 rounded-sm mx-1 w-12'
-              : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800',
-          )}
+    <nav
+      style={{
+        width: 52,
+        background: 'var(--c-surface)',
+        borderRight: '1px solid var(--c-border-sub)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+      }}
+    >
+      {/* Logotype */}
+      <div
+        style={{
+          height: 48,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            color: 'var(--c-accent)',
+            lineHeight: 1,
+          }}
         >
-          <Icon size={17} strokeWidth={1.75} />
-          <span>{label}</span>
-        </button>
-      ))}
+          CPA
+        </span>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--c-border-sub)', margin: '0 10px' }} />
+
+      {/* Nav items */}
+      <div style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {NAV.map(({ id, label, icon: Icon }) => {
+          const active = current === id
+          return (
+            <button
+              key={id}
+              title={label}
+              onClick={() => onChange(id)}
+              className="nav-item"
+              data-active={active}
+            >
+              <Icon
+                size={16}
+                strokeWidth={active ? 2.25 : 1.75}
+              />
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Bottom decoration — tiny version hint */}
+      <div
+        style={{
+          height: 40,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: '50%',
+            background: 'var(--c-border)',
+          }}
+        />
+      </div>
     </nav>
   )
 }

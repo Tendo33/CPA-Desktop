@@ -1,52 +1,255 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=optional");
 @import "tailwindcss";
 
+/* ─── Design Tokens ─────────────────────────────────────────────────────── */
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
+  /* Backgrounds */
+  --c-bg:         oklch(10.5% 0.008 255);
+  --c-surface:    oklch(13.5% 0.009 255);
+  --c-raised:     oklch(17%   0.011 255);
+  --c-hover:      oklch(20%   0.012 255);
+
+  /* Borders */
+  --c-border:     oklch(22%   0.011 255);
+  --c-border-sub: oklch(15%   0.009 255);
+
+  /* Amber accent */
+  --c-accent:     oklch(74%   0.165 58);
+  --c-accent-dim: oklch(56%   0.11  58);
+  --c-accent-bg:  oklch(16.5% 0.038 58);
+
+  /* Text */
+  --c-text-1:     oklch(93%   0.006 255);
+  --c-text-2:     oklch(64%   0.009 255);
+  --c-text-3:     oklch(42%   0.008 255);
+
+  /* Status */
+  --c-run:        oklch(72%   0.19  145);
+  --c-run-bg:     oklch(15%   0.045 145);
+  --c-start:      oklch(84%   0.17  85);
+  --c-err:        oklch(64%   0.22  22);
+  --c-err-bg:     oklch(14%   0.05  22);
+
+  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* ─── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; overflow: hidden; }
 
 body {
-  overflow: hidden;
-  background: #09090b;
-  color: #fafafa;
+  background: var(--c-bg);
+  color: var(--c-text-1);
   user-select: none;
 }
 
-/* scrollbars */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #52525b; }
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--c-border); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(30% 0.012 255); }
 
-/* shadcn variables */
-:root {
-  --background: 9 9 11;
-  --foreground: 250 250 250;
-  --card: 9 9 11;
-  --card-foreground: 250 250 250;
-  --popover: 9 9 11;
-  --popover-foreground: 250 250 250;
-  --primary: 250 250 250;
-  --primary-foreground: 9 9 11;
-  --secondary: 39 39 42;
-  --secondary-foreground: 250 250 250;
-  --muted: 39 39 42;
-  --muted-foreground: 113 113 122;
-  --accent: 39 39 42;
-  --accent-foreground: 250 250 250;
-  --destructive: 239 68 68;
-  --destructive-foreground: 250 250 250;
-  --border: 39 39 42;
-  --input: 39 39 42;
-  --ring: 212 212 216;
-  --radius: 0.5rem;
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes breathe {
+  0%, 100% { opacity: 1;    transform: scale(1);    }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes progress-shine {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ─── Sidebar Navigation ─────────────────────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  width: 100%;
+  border-radius: 6px;
+  position: relative;
+  cursor: pointer;
+  color: var(--c-text-3);
+  background: transparent;
+  border: none;
+  transition: color 130ms ease, background 130ms ease;
+}
+.nav-item:hover {
+  color: var(--c-text-2);
+  background: var(--c-hover);
+}
+.nav-item[data-active="true"] {
+  color: var(--c-accent);
+  background: var(--c-accent-bg);
+}
+.nav-item[data-active="true"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  height: 56%;
+  width: 2px;
+  background: var(--c-accent);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ─── Toggle Switch ──────────────────────────────────────────────────────── */
+.toggle {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--c-raised);
+  border: 1px solid var(--c-border);
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+  flex-shrink: 0;
+  outline: none;
+  padding: 0;
+}
+.toggle:focus-visible { box-shadow: 0 0 0 2px var(--c-accent-dim); }
+.toggle.on {
+  background: var(--c-accent-bg);
+  border-color: var(--c-accent-dim);
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--c-text-3);
+  transition: transform 180ms ease, background 180ms ease;
+  pointer-events: none;
+}
+.toggle.on .toggle-thumb {
+  transform: translateX(13px);
+  background: var(--c-accent);
+}
+
+/* ─── Status Dot ─────────────────────────────────────────────────────────── */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.running {
+  background: var(--c-run);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.status-dot.starting {
+  background: var(--c-start);
+  animation: breathe 1.2s ease-in-out infinite;
+}
+.status-dot.error { background: var(--c-err); }
+.status-dot.idle  { background: var(--c-text-3); }
+
+/* ─── Page transition ────────────────────────────────────────────────────── */
+.page-fade {
+  animation: fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Selectable text areas ──────────────────────────────────────────────── */
+.selectable { user-select: text; }
+
+/* ─── Log font ───────────────────────────────────────────────────────────── */
+.font-log {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Menlo, Monaco, monospace;
+}
+
+/* ─── Progress bar shimmer ───────────────────────────────────────────────── */
+.progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--c-accent) 0%,
+    oklch(84% 0.2 58) 50%,
+    var(--c-accent) 100%
+  );
+  background-size: 200% 100%;
+  animation: progress-shine 1.6s linear infinite;
+}
+
+/* ─── Section divider ────────────────────────────────────────────────────── */
+.section-rule {
+  height: 1px;
+  background: var(--c-border-sub);
+  margin: 0;
+}
+
+/* ─── Settings row ───────────────────────────────────────────────────────── */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+.setting-row + .setting-row {
+  border-top: 1px solid var(--c-border-sub);
+}
+
+/* ─── Button base ────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 130ms ease, color 130ms ease, opacity 130ms ease;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-ghost {
+  background: var(--c-raised);
+  border-color: var(--c-border);
+  color: var(--c-text-2);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--c-hover);
+  color: var(--c-text-1);
+}
+.btn-primary {
+  background: var(--c-accent-bg);
+  border-color: var(--c-accent-dim);
+  color: var(--c-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: oklch(20% 0.045 58);
+  border-color: var(--c-accent);
+}
+.btn-danger {
+  background: var(--c-err-bg);
+  border-color: oklch(28% 0.07 22);
+  color: var(--c-err);
+}
+.btn-danger:hover:not(:disabled) {
+  background: oklch(18% 0.06 22);
 }

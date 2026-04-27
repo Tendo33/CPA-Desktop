@@ -13,15 +13,109 @@ import {
   type AppSettings,
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
-import { FolderOpen, Save, RefreshCw } from 'lucide-react'
+import { FolderOpen, RefreshCw } from 'lucide-react'
 
+/* ── Toggle Switch ─────────────────────────────────────────────────────── */
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      className={`toggle${checked ? ' on' : ''}`}
+      style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+      onClick={() => !disabled && onChange(!checked)}
+      aria-checked={checked}
+      role="switch"
+    >
+      <span className="toggle-thumb" />
+    </button>
+  )
+}
+
+/* ── Section wrapper ───────────────────────────────────────────────────── */
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 2,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--c-accent)',
+          }}
+        >
+          {title}
+        </span>
+        {action}
+      </div>
+      <div style={{ border: '1px solid var(--c-border-sub)', borderRadius: 8, overflow: 'hidden' }}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
+/* ── Setting row ───────────────────────────────────────────────────────── */
+function Row({
+  label,
+  hint,
+  children,
+  first,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+  first?: boolean
+}) {
+  return (
+    <div
+      className="setting-row"
+      style={{
+        padding: '11px 14px',
+        borderTop: first ? 'none' : '1px solid var(--c-border-sub)',
+        background: 'var(--c-surface)',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-1)' }}>{label}</span>
+        {hint && <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{hint}</span>}
+      </div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  )
+}
+
+/* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
   const { status } = useCpaStore()
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [yaml, setYaml] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [yaml, setYaml]         = useState('')
+  const [saving, setSaving]     = useState(false)
   const [yamlError, setYamlError] = useState('')
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg]           = useState('')
   const [autolaunch, setAutolaunch] = useState(false)
   const [yamlPort, setYamlPort] = useState<number | null>(null)
 
@@ -52,7 +146,7 @@ export function SettingsPage() {
     setSaving(true)
     try {
       await saveSettings(settings)
-      flash('Settings saved')
+      flash('Saved')
     } catch (e) {
       flash(String(e))
     }
@@ -78,135 +172,146 @@ export function SettingsPage() {
 
   if (!settings) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
-        Loading...
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--c-text-3)', fontSize: 12 }}>
+        Loading…
       </div>
     )
   }
 
+  const portMismatch = yamlPort !== null && yamlPort !== settings.port
+
   return (
-    <div className="h-full overflow-y-auto bg-zinc-950 select-text">
-      <div className="max-w-2xl mx-auto p-6 space-y-8">
-        {/* App Settings */}
-        <section>
-          <h2 className="text-sm font-semibold text-zinc-200 mb-4 pb-2 border-b border-zinc-800">
-            Application Settings
-          </h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <label className="text-xs text-zinc-400 w-28 shrink-0">CPA Port</label>
+    <div
+      className="selectable"
+      style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
+    >
+      <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+        {/* ── Application ─────────────────────────────────────────── */}
+        <Section title="Application">
+          <Row first label="CPA Port" hint={portMismatch ? `config.yaml uses :${yamlPort}` : 'Port CPA listens on'}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {portMismatch && (
+                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>⚠ mismatch</span>
+              )}
               <input
                 type="number"
                 value={settings.port}
                 min={1024}
                 max={65535}
-                onChange={(e) =>
-                  setSettings({ ...settings, port: Number(e.target.value) })
-                }
-                className="h-7 text-xs bg-zinc-900 border border-zinc-700 rounded px-2 text-zinc-200 outline-none focus:border-zinc-500 w-24"
+                onChange={(e) => setSettings({ ...settings, port: Number(e.target.value) })}
+                style={{
+                  width: 72,
+                  height: 26,
+                  background: 'var(--c-raised)',
+                  border: '1px solid var(--c-border)',
+                  borderRadius: 5,
+                  padding: '0 8px',
+                  fontSize: 12,
+                  fontFamily: 'inherit',
+                  color: 'var(--c-text-1)',
+                  textAlign: 'right',
+                  outline: 'none',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--c-accent-dim)')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--c-border)')}
               />
-              {yamlPort !== null && yamlPort !== settings.port && (
-                <span className="text-xs text-yellow-500">
-                  config.yaml uses port {yamlPort} — edit config.yaml to change
-                </span>
-              )}
-              {yamlPort === settings.port && (
-                <span className="text-xs text-zinc-600">synced with config.yaml</span>
-              )}
             </div>
+          </Row>
 
-            <div className="flex items-center gap-4">
-              <label className="text-xs text-zinc-400 w-28 shrink-0">
-                Auto-start CPA
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.autoStart}
-                  onChange={(e) =>
-                    setSettings({ ...settings, autoStart: e.target.checked })
-                  }
-                  className="w-3.5 h-3.5 accent-blue-500"
-                />
-                <span className="text-xs text-zinc-300">
-                  Auto-start CPA when app opens
-                </span>
-              </label>
+          <Row label="Auto-start CPA" hint="Launch CPA when the app opens">
+            <Toggle
+              checked={settings.autoStart}
+              onChange={(v) => setSettings({ ...settings, autoStart: v })}
+            />
+          </Row>
 
-            <div className="flex items-center gap-4">
-              <label className="text-xs text-zinc-400 w-28 shrink-0">System Login</label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autolaunch}
-                  onChange={(e) => handleAutolaunchChange(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-blue-500"
-                />
-                <span className="text-xs text-zinc-300">
-                  Launch CPA Desktop on system login
-                </span>
-              </label>
-            </div>
-            </div>
+          <Row label="Launch on login" hint="Start CPA Desktop at system login">
+            <Toggle checked={autolaunch} onChange={handleAutolaunchChange} />
+          </Row>
+        </Section>
 
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={handleSaveSettings}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Save size={12} />
-                Save Settings
-              </button>
-              <button
-                onClick={openDataDir}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-lg transition-colors cursor-pointer"
-              >
-                <FolderOpen size={12} />
-                Open Data Folder
-              </button>
-              <button
-                onClick={handleRestartCpa}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-lg transition-colors cursor-pointer"
-              >
-                <RefreshCw size={12} />
-                Restart CPA
-              </button>
-              {msg && (
-                <span className="text-xs text-green-400">{msg}</span>
-              )}
-            </div>
-          </div>
-        </section>
+        {/* ── Actions ─────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSaveSettings}
+            disabled={saving}
+            className="btn btn-primary"
+          >
+            {saving ? 'Saving…' : 'Save Settings'}
+          </button>
 
-        {/* config.yaml editor */}
-        <section>
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-200">config.yaml</h2>
+          <button onClick={openDataDir} className="btn btn-ghost">
+            <FolderOpen size={12} strokeWidth={1.75} />
+            Data Folder
+          </button>
+
+          <button onClick={handleRestartCpa} className="btn btn-ghost">
+            <RefreshCw size={12} strokeWidth={1.75} />
+            Restart CPA
+          </button>
+
+          {msg && (
+            <span style={{ fontSize: 12, color: 'var(--c-run)', fontWeight: 500 }}>
+              {msg}
+            </span>
+          )}
+        </div>
+
+        {/* ── config.yaml ─────────────────────────────────────────── */}
+        <Section
+          title="config.yaml"
+          action={
             <button
               onClick={handleSaveYaml}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              className="btn btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
             >
-              <Save size={12} />
               Save & Apply
             </button>
+          }
+        >
+          <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
+            {yamlError && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  borderBottom: '1px solid oklch(28% 0.08 22)',
+                  background: 'var(--c-err-bg)',
+                  fontSize: 11,
+                  color: 'var(--c-err)',
+                }}
+              >
+                {yamlError}
+              </div>
+            )}
+            <textarea
+              value={yaml}
+              onChange={(e) => setYaml(e.target.value)}
+              spellCheck={false}
+              className="font-log"
+              style={{
+                width: '100%',
+                height: 320,
+                background: 'transparent',
+                border: 'none',
+                padding: '12px 14px',
+                fontSize: 11,
+                color: 'var(--c-text-2)',
+                resize: 'vertical',
+                outline: 'none',
+                lineHeight: 1.7,
+                display: 'block',
+              }}
+            />
           </div>
-          {yamlError && (
-            <p className="text-xs text-red-400 mb-2 p-2 bg-red-950/30 rounded border border-red-900">
-              {yamlError}
-            </p>
-          )}
-          <textarea
-            value={yaml}
-            onChange={(e) => setYaml(e.target.value)}
-            spellCheck={false}
-            className="w-full h-96 font-mono text-[11px] bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-zinc-300 resize-y outline-none focus:border-zinc-500 leading-5"
-          />
-          <p className="text-[11px] text-zinc-600 mt-1">
-            Restart CPA after saving config changes for them to take effect.
-          </p>
-        </section>
+        </Section>
+
+        <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>
+          Restart CPA after saving config changes for them to take effect.
+        </p>
       </div>
     </div>
   )

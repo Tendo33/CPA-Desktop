@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react'
 import { checkCpaUpdate, downloadCpaUpdate, type UpdateCheckResult } from '@/lib/tauri'
 import { listen } from '@tauri-apps/api/event'
-import { Download, Loader2, AlertCircle } from 'lucide-react'
 
 interface Props {
   onComplete: () => void
 }
 
 export function FirstRunSetup({ onComplete }: Props) {
-  const [update, setUpdate] = useState<UpdateCheckResult | null>(null)
-  const [checking, setChecking] = useState(true)
+  const [update, setUpdate]         = useState<UpdateCheckResult | null>(null)
+  const [checking, setChecking]     = useState(true)
   const [downloading, setDownloading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [error, setError] = useState('')
+  const [progress, setProgress]     = useState(0)
+  const [error, setError]           = useState('')
 
   useEffect(() => {
     checkCpaUpdate()
@@ -25,13 +24,9 @@ export function FirstRunSetup({ onComplete }: Props) {
         const [dl, total] = e.payload
         setProgress(Math.round((dl / Math.max(total, 1)) * 100))
       }),
-      listen('cpa:download-complete', () => {
-        onComplete()
-      }),
+      listen('cpa:download-complete', () => onComplete()),
     ]
-    return () => {
-      unsubs.forEach((p) => p.then((fn) => fn()))
-    }
+    return () => { unsubs.forEach((p) => p.then((fn) => fn())) }
   }, [onComplete])
 
   const handleDownload = async () => {
@@ -47,69 +42,163 @@ export function FirstRunSetup({ onComplete }: Props) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-zinc-950 gap-6 p-8">
-      {/* Logo */}
-      <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
-        <span className="text-3xl font-bold text-zinc-100">C</span>
-      </div>
+    <div
+      style={{
+        height: '100vh',
+        background: 'var(--c-bg)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        animation: 'fade-in 300ms ease both',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 0,
+          maxWidth: 340,
+          width: '100%',
+          animation: 'fade-up 380ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        }}
+      >
+        {/* Logotype mark */}
+        <div style={{
+          width: 60, height: 60,
+          borderRadius: 16,
+          background: 'var(--c-accent-bg)',
+          border: '1px solid var(--c-accent-dim)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: 24,
+        }}>
+          <span style={{
+            fontSize: 26,
+            fontWeight: 700,
+            color: 'var(--c-accent)',
+            letterSpacing: '-0.03em',
+          }}>
+            C
+          </span>
+        </div>
 
-      <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold text-zinc-100">Welcome to CPA Desktop</h1>
-        <p className="text-zinc-500 text-sm max-w-sm">
-          CLIProxyAPI needs to be downloaded before you can start. This is a
-          one-time setup (~14 MB).
+        {/* Heading */}
+        <h1 style={{
+          fontSize: 22,
+          fontWeight: 600,
+          color: 'var(--c-text-1)',
+          letterSpacing: '-0.025em',
+          textAlign: 'center',
+          marginBottom: 10,
+        }}>
+          CPA Desktop
+        </h1>
+
+        <p style={{
+          fontSize: 13,
+          color: 'var(--c-text-3)',
+          textAlign: 'center',
+          lineHeight: 1.6,
+          marginBottom: 32,
+          maxWidth: 280,
+        }}>
+          The CLIProxyAPI binary needs to be downloaded before you can start.
+          {' '}This is a one-time setup.
         </p>
-      </div>
 
-      {/* States */}
-      {checking && (
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <Loader2 size={15} className="animate-spin" />
-          Checking latest release...
-        </div>
-      )}
-
-      {!checking && !downloading && update && (
-        <div className="space-y-3 text-center">
-          <p className="text-xs text-zinc-500">
-            Latest version:{' '}
-            <span className="text-zinc-300 font-medium">{update.latestVersion}</span>
-          </p>
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors cursor-pointer"
-          >
-            <Download size={15} />
-            Download CLIProxyAPI {update.latestVersion}
-          </button>
-        </div>
-      )}
-
-      {downloading && (
-        <div className="w-64 space-y-3 text-center">
-          <div className="bg-zinc-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-blue-500 h-full rounded-full transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
+        {/* States */}
+        {checking && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text-3)', fontSize: 13 }}>
+            <div style={{
+              width: 14, height: 14,
+              border: '1.5px solid var(--c-border)',
+              borderTopColor: 'var(--c-accent)',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+              flexShrink: 0,
+            }} />
+            Checking latest release…
           </div>
-          <p className="text-xs text-zinc-500">{progress}% downloaded</p>
-        </div>
-      )}
+        )}
 
-      {error && (
-        <div className="flex items-center gap-2 text-red-400 text-sm max-w-sm text-center">
-          <AlertCircle size={15} className="shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+        {!checking && !downloading && update && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, width: '100%' }}>
+            <div style={{
+              padding: '7px 14px',
+              background: 'var(--c-surface)',
+              border: '1px solid var(--c-border-sub)',
+              borderRadius: 6,
+              fontSize: 12,
+              color: 'var(--c-text-3)',
+            }}>
+              Latest:{' '}
+              <span style={{ color: 'var(--c-text-1)', fontWeight: 500 }}>
+                {update.latestVersion}
+              </span>
+            </div>
 
-      {!checking && !update && !error && (
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <AlertCircle size={15} />
-          Could not fetch release info. Check your internet connection.
-        </div>
-      )}
+            <button
+              onClick={handleDownload}
+              className="btn btn-primary"
+              style={{ fontSize: 13, padding: '9px 28px', width: '100%', justifyContent: 'center' }}
+            >
+              Download CLIProxyAPI
+            </button>
+          </div>
+        )}
+
+        {downloading && (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Progress bar */}
+            <div style={{
+              height: 3,
+              background: 'var(--c-raised)',
+              borderRadius: 999,
+              overflow: 'hidden',
+              width: '100%',
+            }}>
+              <div
+                className="progress-shimmer"
+                style={{
+                  height: '100%',
+                  width: `${progress}%`,
+                  borderRadius: 999,
+                  transition: 'width 200ms ease',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Downloading…</span>
+              <span style={{ fontSize: 12, color: 'var(--c-text-2)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                {progress}%
+              </span>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            padding: '10px 14px',
+            background: 'var(--c-err-bg)',
+            border: '1px solid oklch(28% 0.08 22)',
+            borderRadius: 6,
+            fontSize: 12,
+            color: 'var(--c-err)',
+            width: '100%',
+            textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {!checking && !update && !error && (
+          <p style={{ fontSize: 12, color: 'var(--c-text-3)', textAlign: 'center' }}>
+            Could not fetch release info. Check your internet connection.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,54 +1,145 @@
 import { useCpaStore } from '@/stores/cpa'
 import { startCpa, stopCpa } from '@/lib/tauri'
-import { cn } from '@/lib/utils'
 import type { CpaStatus } from '@/lib/tauri'
 
-function statusLabel(status: CpaStatus): string {
-  if (typeof status === 'object') return `Error`
-  return status
+function dotClass(status: CpaStatus): string {
+  if (status === 'Running')  return 'status-dot running'
+  if (status === 'Starting') return 'status-dot starting'
+  if (typeof status === 'object') return 'status-dot error'
+  return 'status-dot idle'
 }
 
-function StatusDot({ status }: { status: CpaStatus }) {
-  const isRunning = status === 'Running'
-  const isStarting = status === 'Starting'
-  const isError = typeof status === 'object'
+function statusText(status: CpaStatus): string {
+  if (status === 'Running')  return 'Running'
+  if (status === 'Starting') return 'Starting'
+  if (status === 'Stopped')  return 'Stopped'
+  if (status === 'Idle')     return 'Not started'
+  if (typeof status === 'object') return 'Error'
+  return String(status)
+}
 
-  return (
-    <span
-      className={cn(
-        'inline-block w-2 h-2 rounded-full shrink-0',
-        isRunning && 'bg-green-500',
-        isStarting && 'bg-yellow-400 animate-pulse',
-        isError && 'bg-red-500',
-        !isRunning && !isStarting && !isError && 'bg-zinc-600',
-      )}
-    />
-  )
+function statusColor(status: CpaStatus): string {
+  if (status === 'Running')  return 'var(--c-run)'
+  if (status === 'Starting') return 'var(--c-start)'
+  if (typeof status === 'object') return 'var(--c-err)'
+  return 'var(--c-text-3)'
 }
 
 export function StatusBar() {
   const { status, port } = useCpaStore()
   const isRunning = status === 'Running'
+  const isStarting = status === 'Starting'
+  const errorMsg = typeof status === 'object' ? (status as { error: string }).error : null
 
   return (
-    <div className="flex items-center gap-3 px-4 h-7 text-xs text-zinc-400 bg-zinc-900 border-t border-zinc-800 shrink-0 select-none">
-      <StatusDot status={status} />
-      <span className="font-medium text-zinc-300">CPA</span>
-      <span>{statusLabel(status)}</span>
-      {typeof status === 'object' && (
-        <span className="text-red-400 truncate max-w-xs">{status.error}</span>
-      )}
-      <span className="ml-auto text-zinc-600">:{port}</span>
-      <button
-        onClick={() => (isRunning ? stopCpa() : startCpa())}
-        className={cn(
-          'px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer',
-          isRunning
-            ? 'bg-zinc-700 hover:bg-red-900 text-zinc-300 hover:text-red-300'
-            : 'bg-zinc-700 hover:bg-green-900 text-zinc-300 hover:text-green-300',
+    <div
+      style={{
+        height: 26,
+        background: 'var(--c-surface)',
+        borderTop: '1px solid var(--c-border-sub)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '0 12px',
+        flexShrink: 0,
+      }}
+    >
+      {/* Status pill */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span className={dotClass(status)} />
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: statusColor(status),
+            letterSpacing: '0.01em',
+          }}
+        >
+          {statusText(status)}
+        </span>
+        {errorMsg && (
+          <span
+            style={{
+              fontSize: 11,
+              color: 'var(--c-err)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 240,
+              opacity: 0.8,
+            }}
+            title={errorMsg}
+          >
+            — {errorMsg}
+          </span>
         )}
+      </div>
+
+      {/* Port */}
+      <div
+        style={{
+          fontSize: 11,
+          color: 'var(--c-text-3)',
+          fontVariantNumeric: 'tabular-nums',
+          marginLeft: 4,
+        }}
       >
-        {isRunning ? 'Stop' : 'Start'}
+        :{port}
+      </div>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Start / Stop */}
+      <button
+        onClick={() => (isRunning || isStarting ? stopCpa() : startCpa())}
+        disabled={isStarting}
+        style={{
+          fontSize: 11,
+          fontWeight: 500,
+          fontFamily: 'inherit',
+          padding: '1px 8px',
+          borderRadius: 4,
+          border: '1px solid',
+          cursor: isStarting ? 'default' : 'pointer',
+          transition: 'background 130ms ease, color 130ms ease',
+          ...(isRunning
+            ? {
+                background: 'transparent',
+                borderColor: 'var(--c-border)',
+                color: 'var(--c-text-3)',
+              }
+            : {
+                background: 'var(--c-accent-bg)',
+                borderColor: 'var(--c-accent-dim)',
+                color: 'var(--c-accent)',
+              }),
+        }}
+        onMouseEnter={(e) => {
+          if (isStarting) return
+          if (isRunning) {
+            e.currentTarget.style.background = 'var(--c-err-bg)'
+            e.currentTarget.style.borderColor = 'oklch(28% 0.07 22)'
+            e.currentTarget.style.color = 'var(--c-err)'
+          } else {
+            e.currentTarget.style.background = 'oklch(20% 0.045 58)'
+            e.currentTarget.style.borderColor = 'var(--c-accent)'
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (isStarting) return
+          if (isRunning) {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.borderColor = 'var(--c-border)'
+            e.currentTarget.style.color = 'var(--c-text-3)'
+          } else {
+            e.currentTarget.style.background = 'var(--c-accent-bg)'
+            e.currentTarget.style.borderColor = 'var(--c-accent-dim)'
+            e.currentTarget.style.color = 'var(--c-accent)'
+          }
+        }}
+      >
+        {isRunning ? 'Stop' : isStarting ? 'Starting…' : 'Start'}
       </button>
     </div>
   )
