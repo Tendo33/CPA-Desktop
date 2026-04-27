@@ -73,13 +73,33 @@ export function Sidebar({ current, onChange }: Props) {
       <div style={{ height: 1, background: 'var(--c-border-sub)', margin: '0 10px' }} />
 
       {/* Nav items */}
-      <div style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div
+        role="tablist"
+        aria-orientation="vertical"
+        style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+          e.preventDefault()
+          const buttons = Array.from(
+            (e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[data-nav-item]'),
+          )
+          const idx = buttons.findIndex((b) => b === document.activeElement)
+          const next = e.key === 'ArrowDown'
+            ? (idx + 1) % buttons.length
+            : (idx - 1 + buttons.length) % buttons.length
+          buttons[next]?.focus()
+        }}
+      >
         {NAV.map(({ id, label, icon: Icon }) => {
           const active = current === id
           return (
             <button
               key={id}
               title={label}
+              aria-label={label}
+              role="tab"
+              aria-selected={active}
+              data-nav-item
               onClick={() => onChange(id)}
               className="nav-item"
               data-active={active}

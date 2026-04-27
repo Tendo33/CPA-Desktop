@@ -37,7 +37,11 @@ export function StatusBar() {
     >
       {/* Status pill */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <span className={dotClass(status)} />
+        <span
+          className={dotClass(status)}
+          role="status"
+          aria-label={statusText(status)}
+        />
         <span
           style={{
             fontSize: 11,
