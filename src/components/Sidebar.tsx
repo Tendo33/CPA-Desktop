@@ -1,4 +1,4 @@
-import { LayoutDashboard, ScrollText, Settings, Info, Sun, Moon } from 'lucide-react'
+import { LayoutDashboard, ScrollText, Settings, Info, Sun, Moon, Laptop } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
 import { useT } from '@/lib/i18n'
 
@@ -20,8 +20,20 @@ export function Sidebar({ current, onChange }: Props) {
     { id: 'about',     label: t.nav.about,     icon: Info },
   ]
 
-  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
+    setTheme(next)
+  }
   const toggleLang  = () => setLang(lang === 'en' ? 'zh' : 'en')
+
+  const themeIcon =
+    theme === 'light' ? <Sun size={15} strokeWidth={1.75} /> :
+    theme === 'dark'  ? <Moon size={15} strokeWidth={1.75} /> :
+                        <Laptop size={15} strokeWidth={1.75} />
+  const themeTitle =
+    theme === 'light' ? 'Light theme — click for Dark' :
+    theme === 'dark'  ? 'Dark theme — click for System' :
+                        'System theme — click for Light'
 
   return (
     <nav
@@ -94,14 +106,9 @@ export function Sidebar({ current, onChange }: Props) {
           gap: 4,
         }}
       >
-        {/* Theme toggle: sun/moon */}
-        <SidebarIconBtn
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          onClick={toggleTheme}
-        >
-          {theme === 'dark'
-            ? <Sun  size={15} strokeWidth={1.75} />
-            : <Moon size={15} strokeWidth={1.75} />}
+        {/* Theme toggle: light → dark → system */}
+        <SidebarIconBtn title={themeTitle} onClick={toggleTheme}>
+          {themeIcon}
         </SidebarIconBtn>
 
         {/* Language toggle: EN / 中 */}

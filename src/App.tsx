@@ -25,9 +25,18 @@ export default function App() {
 
   const theme = useSettingsStore((s) => s.theme)
 
-  // Apply theme to document root so CSS :root[data-theme] selector works
+  // Apply theme; honor 'system' by reading prefers-color-scheme
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
+    const apply = () => {
+      const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      const eff = theme === 'system' ? sys : theme
+      document.documentElement.setAttribute('data-theme', eff)
+    }
+    apply()
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => { if (theme === 'system') apply() }
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
   }, [theme])
 
   useEffect(() => {
