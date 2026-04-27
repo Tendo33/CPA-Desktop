@@ -1,6 +1,6 @@
 import { useSettingsStore } from '@/stores/settings'
 
-const translations = {
+export const translations = {
   en: {
     // Sidebar nav
     nav: {
