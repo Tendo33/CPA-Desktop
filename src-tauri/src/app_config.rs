@@ -3,9 +3,17 @@ use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+pub const DEFAULT_PORT: u16 = 8317;
 
 fn default_schema_version() -> u32 {
     SETTINGS_SCHEMA_VERSION
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastPanic {
+    pub at_iso: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,15 +24,18 @@ pub struct AppSettings {
     pub port: u16,
     pub auto_start: bool,
     pub cpa_version: Option<String>,
+    #[serde(default)]
+    pub last_panic: Option<LastPanic>,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             schema_version: SETTINGS_SCHEMA_VERSION,
-            port: 8317,
+            port: DEFAULT_PORT,
             auto_start: true,
             cpa_version: None,
+            last_panic: None,
         }
     }
 }

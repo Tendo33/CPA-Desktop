@@ -3,6 +3,7 @@ pub mod commands;
 pub mod cpa_lifecycle;
 pub mod cpa_manager;
 pub mod log_stream;
+pub mod panic_log;
 pub mod tray;
 pub mod util;
 
@@ -92,6 +93,11 @@ pub fn run() {
         .setup(|app| {
             app_config::ensure_dirs(app.handle())?;
             app_config::ensure_config_yaml(app.handle())?;
+
+            let logs = app_config::logs_dir(app.handle());
+            let _ = std::fs::create_dir_all(&logs);
+            let s_path = app_config::settings_path(app.handle());
+            panic_log::install(logs, s_path);
 
             let mut settings = app_config::load_settings(app.handle());
             // Sync port from config.yaml if present (config.yaml is authoritative)
