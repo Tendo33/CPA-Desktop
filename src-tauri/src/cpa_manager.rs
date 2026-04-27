@@ -17,6 +17,7 @@ pub struct CpaState {
     pub process: Option<Child>,
     pub status: CpaStatus,
     pub port: u16,
+    pub auto_start_pending: bool,
 }
 
 impl CpaState {
@@ -25,6 +26,7 @@ impl CpaState {
             process: None,
             status: CpaStatus::Idle,
             port,
+            auto_start_pending: false,
         }
     }
 }
