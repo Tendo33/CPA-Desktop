@@ -736,6 +736,252 @@ git commit -m "fix: health monitor exits on Stopped/Idle and reuses reqwest clie
 
 ---
 
+## Task 5b: Tray robustness + DRY `start_cpa` + safe async spawn
+
+Three issues found in `tray.rs` review:
+- (A) Tooltip detection uses `payload.contains("running")`, which false-positives on `Error("port already running")` etc.
+- (B) `tray_by_id("")` is a hack — pass empty string to find any tray.
+- (C) `tray_start_cpa` duplicates ~60 lines of `commands::cpa::start_cpa`.
+
+Plus a global Rust hardening: `tauri::async_runtime::spawn` swallows panics inside the future. Wrap the spawn pattern.
+
+**Files:**
+- Create: `src-tauri/src/cpa_lifecycle.rs`
+- Modify: `src-tauri/src/tray.rs`
+- Modify: `src-tauri/src/commands/cpa.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Create: `src-tauri/src/util/spawn.rs`
+
+- [ ] **Step 1: Extract shared `start` into `cpa_lifecycle.rs`**
+
+`src-tauri/src/cpa_lifecycle.rs`:
+
+```rust
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::cpa_manager::{kill_cpa, spawn_cpa, CpaStatus, SharedCpaState};
+use crate::log_stream::{pipe_process_output, LogBuffer};
+use crate::{app_config, http_ping, spawn_health_monitor};
+
+pub async fn start(app: AppHandle) -> Result<(), String> {
+    let cpa_state = app
+        .try_state::<SharedCpaState>()
+        .ok_or("cpa state missing")?
+        .inner()
+        .clone();
+    let log_buf = app
+        .try_state::<LogBuffer>()
+        .ok_or("log buffer missing")?
+        .inner()
+        .clone();
+
+    let port = cpa_state.lock().unwrap().port;
+    let binary = app_config::cpa_binary_path(&app);
+    if !binary.exists() {
+        let _ = app.emit("cpa:status", &CpaStatus::Idle);
+        return Err("CPA binary not present".into());
+    }
+    if http_ping(port).await {
+        cpa_state.lock().unwrap().status = CpaStatus::Running;
+        let _ = app.emit("cpa:status", &CpaStatus::Running);
+        return Ok(());
+    }
+
+    let workdir = app_config::data_dir(&app);
+    let output = spawn_cpa(&binary, &workdir, &cpa_state).map_err(|e| {
+        let _ = app.emit("cpa:status", &CpaStatus::Error(e.clone()));
+        e
+    })?;
+    let _ = app.emit("cpa:status", &CpaStatus::Starting);
+    pipe_process_output(app.clone(), log_buf, output.stdout, output.stderr);
+
+    let app2 = app.clone();
+    let state2 = cpa_state.clone();
+    crate::util::spawn::supervised(async move {
+        for _ in 0..30u32 {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if http_ping(port).await {
+                state2.lock().unwrap().status = CpaStatus::Running;
+                let _ = app2.emit("cpa:status", &CpaStatus::Running);
+                spawn_health_monitor(app2.clone(), state2.clone(), port);
+                return;
+            }
+            if !crate::cpa_manager::check_process_alive(&state2) {
+                let msg = "CPA process exited".to_string();
+                state2.lock().unwrap().status = CpaStatus::Error(msg.clone());
+                let _ = app2.emit("cpa:status", &CpaStatus::Error(msg));
+                return;
+            }
+        }
+        let msg = "CPA failed to start within 30s".to_string();
+        state2.lock().unwrap().status = CpaStatus::Error(msg.clone());
+        let _ = app2.emit("cpa:status", &CpaStatus::Error(msg));
+    });
+    Ok(())
+}
+
+pub fn stop(app: &AppHandle) {
+    if let Some(state) = app.try_state::<SharedCpaState>() {
+        kill_cpa(&state);
+        let _ = app.emit("cpa:status", &CpaStatus::Stopped);
+    }
+}
+```
+
+Add `pub mod cpa_lifecycle;` and `pub mod util;` (with `pub mod spawn;` inside) to `lib.rs`.
+
+- [ ] **Step 2: `util::spawn::supervised` — panic-safe spawn**
+
+`src-tauri/src/util/mod.rs`:
+
+```rust
+pub mod spawn;
+```
+
+`src-tauri/src/util/spawn.rs`:
+
+```rust
+use std::future::Future;
+
+/// Like `tauri::async_runtime::spawn`, but logs panics instead of swallowing them.
+pub fn supervised<F>(fut: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    tauri::async_runtime::spawn(async move {
+        let result = futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(fut)).await;
+        if let Err(panic) = result {
+            let msg = match panic.downcast_ref::<&'static str>() {
+                Some(s) => (*s).to_string(),
+                None => match panic.downcast_ref::<String>() {
+                    Some(s) => s.clone(),
+                    None => "<non-string panic>".to_string(),
+                },
+            };
+            log::error!("supervised future panicked: {msg}");
+        }
+    });
+}
+```
+
+> Add `log = "0.4"` already present. Add `futures-util = "0.3"` already present.
+
+- [ ] **Step 3: Refactor `tray.rs`**
+
+Rewrite `tray.rs` so it (1) names the tray `"main"`, (2) parses `cpa:status` JSON into `CpaStatus`, (3) calls `cpa_lifecycle::start` instead of duplicating logic.
+
+Replace the body of `setup_tray`:
+
+```rust
+const TRAY_ID: &str = "main";
+
+pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let show = MenuItemBuilder::new("Open Dashboard").id("show").build(app)?;
+    let start = MenuItemBuilder::new("Start CPA").id("start").build(app)?;
+    let stop = MenuItemBuilder::new("Stop CPA").id("stop").build(app)?;
+    let open_logs = MenuItemBuilder::new("Open Log Folder").id("open-logs").build(app)?;
+    let check_updates = MenuItemBuilder::new("Check for Updates").id("check-updates").build(app)?;
+    let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let quit = MenuItemBuilder::new("Quit CPA Desktop").id("quit").build(app)?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .item(&sep1)
+        .item(&start)
+        .item(&stop)
+        .item(&sep2)
+        .item(&open_logs)
+        .item(&check_updates)
+        .item(&sep2)
+        .item(&quit)
+        .build()?;
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&menu)
+        .tooltip("CPA Desktop — Stopped")
+        .on_menu_event(move |app, event| match event.id().as_ref() {
+            "show" => show_main_window(app),
+            "start" => {
+                let app_c = app.clone();
+                crate::util::spawn::supervised(async move {
+                    let _ = crate::cpa_lifecycle::start(app_c).await;
+                });
+            }
+            "stop" => crate::cpa_lifecycle::stop(app),
+            "open-logs" => {
+                let dir = crate::app_config::logs_dir(app);
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>);
+            }
+            "check-updates" => { let _ = app.emit("app:check-updates", ()); }
+            "quit" => { crate::cpa_lifecycle::stop(app); app.exit(0); }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { .. } = event {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    let app3 = app.clone();
+    app.listen("cpa:status", move |event| {
+        let tooltip = match serde_json::from_str::<CpaStatus>(event.payload()) {
+            Ok(CpaStatus::Running) => "CPA Desktop — Running ✓",
+            Ok(CpaStatus::Starting) => "CPA Desktop — Starting…",
+            Ok(CpaStatus::Stopped) => "CPA Desktop — Stopped",
+            Ok(CpaStatus::Idle) => "CPA Desktop — Not downloaded",
+            Ok(CpaStatus::Error(_)) => "CPA Desktop — Error",
+            Err(_) => "CPA Desktop",
+        };
+        if let Some(tray) = app3.tray_by_id(TRAY_ID) {
+            let _ = tray.set_tooltip(Some(tooltip));
+        }
+    });
+
+    Ok(())
+}
+```
+
+Delete `tray_start_cpa` (now lives in `cpa_lifecycle::start`).
+
+> Need `CpaStatus: Deserialize`. Add `Deserialize` derive in Task 3 (already adds Serialize) — extend to `Deserialize` here.
+
+- [ ] **Step 4: Re-route `commands::cpa::start_cpa` to share logic**
+
+In `src-tauri/src/commands/cpa.rs::start_cpa`, replace the body with a delegation:
+
+```rust
+#[tauri::command]
+pub async fn start_cpa(app: AppHandle) -> Result<(), String> {
+    crate::cpa_lifecycle::start(app).await
+}
+```
+
+Keep `stop_cpa` similar:
+
+```rust
+#[tauri::command]
+pub async fn stop_cpa(app: AppHandle) -> Result<(), String> {
+    crate::cpa_lifecycle::stop(&app);
+    Ok(())
+}
+```
+
+- [ ] **Step 5: Verify + commit**
+
+```bash
+cargo fmt --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+git add src-tauri/
+git commit -m "refactor: extract cpa_lifecycle, name tray, deserialize status payload, supervised spawn"
+```
+
+---
+
 ## Task 6: Tighten CSP + scoped fs permissions
 
 **Files:**
@@ -887,6 +1133,112 @@ git commit -m "feat: persist window size and position across restarts"
 
 ---
 
+## Task 8b: Settings file hardening — schema_version + corruption recovery
+
+Today `app_config::load_settings` `unwrap_or_default()` on parse failure, which silently wipes the user's settings. Two fixes:
+
+1. Add a `schema_version: u32` field so future migrations are explicit.
+2. On parse error, rename the broken file to `settings.broken.<ts>.json` and log a warning, instead of silently overwriting on next save.
+
+**Files:**
+- Modify: `src-tauri/src/app_config.rs`
+- Modify: `src-tauri/src/commands/settings.rs` (only if struct field list is enumerated)
+- Add test in `src-tauri/tests/app_config_tests.rs`
+
+- [ ] **Step 1: Update `Settings` struct**
+
+```rust
+pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
+    pub theme: String,
+    pub lang: String,
+    pub auto_start: bool,
+    pub auto_check_updates: bool,
+    pub port: u16,
+    pub last_panic: Option<String>,
+    // ...existing fields...
+}
+
+fn default_schema_version() -> u32 { SETTINGS_SCHEMA_VERSION }
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            schema_version: SETTINGS_SCHEMA_VERSION,
+            // ...defaults
+        }
+    }
+}
+```
+
+- [ ] **Step 2: `load_settings` quarantines corrupt files**
+
+```rust
+pub fn load_settings(app: &AppHandle) -> Settings {
+    let path = settings_path(app);
+    if !path.exists() {
+        return Settings::default();
+    }
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("settings unreadable: {e}; using defaults");
+            return Settings::default();
+        }
+    };
+    match serde_json::from_str::<Settings>(&raw) {
+        Ok(s) => s,
+        Err(e) => {
+            let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S");
+            let backup = path.with_file_name(format!("settings.broken.{ts}.json"));
+            let _ = fs::rename(&path, &backup);
+            log::error!(
+                "settings corrupted: {e}; quarantined to {}",
+                backup.display()
+            );
+            Settings::default()
+        }
+    }
+}
+```
+
+- [ ] **Step 3: Test**
+
+`src-tauri/tests/app_config_tests.rs`:
+
+```rust
+#[test]
+fn quarantines_corrupt_settings_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, "not-json{").unwrap();
+    let s = cpa_desktop::app_config::load_settings_at(&path);
+    assert_eq!(s.schema_version, cpa_desktop::app_config::SETTINGS_SCHEMA_VERSION);
+    let mut entries: Vec<_> = std::fs::read_dir(dir.path()).unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    entries.sort();
+    assert!(entries.iter().any(|n| n.starts_with("settings.broken.")));
+}
+```
+
+> Requires extracting a `load_settings_at(path: &Path)` helper for testability.
+
+- [ ] **Step 4: Verify + commit**
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml
+git add src-tauri/
+git commit -m "feat(settings): add schema_version + quarantine corrupted settings file"
+```
+
+---
+
 ## Task 9: Global shortcuts (Cmd/Ctrl+R reload, +, settings, +L logs)
 
 **Files:**
@@ -961,6 +1313,50 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 git add .
 git commit -m "feat: global shortcuts for settings/logs (Cmd/Ctrl+, and Cmd/Ctrl+L)"
+```
+
+---
+
+## Task 9b: Single-instance lock
+
+Two CPA Desktop processes started simultaneously will both bind the tray, both spawn cpa.exe, and corrupt settings on save. Use `tauri-plugin-single-instance` to forward args to the existing instance and focus its window.
+
+**Files:**
+- Modify: `src-tauri/Cargo.toml`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/capabilities/default.json` (no change needed — plugin needs no perms)
+
+- [ ] **Step 1: Add dep**
+
+```toml
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+```
+
+> If we don't ship deep-link handling, drop the feature flag.
+
+- [ ] **Step 2: Register before any other plugin**
+
+In `lib.rs`, before `.plugin(tauri_plugin_log::Builder::...)`:
+
+```rust
+.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}))
+```
+
+- [ ] **Step 3: Manual verification + commit**
+
+```bash
+cargo run --manifest-path src-tauri/Cargo.toml
+# In another terminal: cargo run again — second instance should exit and focus the first window.
+cargo fmt --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+git add src-tauri/
+git commit -m "feat: single-instance lock; forward focus to existing window"
 ```
 
 ---
@@ -1131,6 +1527,63 @@ git commit -m "feat: rust panic hook writes panic-YYYYMMDD.log + last_panic in s
 
 ---
 
+## Task 11b: Adopt `tauri-plugin-log` + extract `DEFAULT_PORT`
+
+Replace the ad-hoc `app.log` writer (currently sprinkled across `lib.rs`, `cpa_manager.rs`, `tray.rs` with `eprintln!` and `writeln!`) with `tauri-plugin-log`. Two wins: structured per-level logs, automatic rotation; gives the frontend a single `log::*` API via plugin commands.
+
+Also: `8087` is hard-coded in 4 places. Hoist it to `pub const DEFAULT_PORT: u16 = 8087;` in `app_config.rs`.
+
+**Files:**
+- Modify: `src-tauri/Cargo.toml`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/app_config.rs` (add `DEFAULT_PORT`)
+- Sweep replace `8087` literal with `app_config::DEFAULT_PORT`
+- Replace `eprintln!`/file-write log calls with `log::info!` / `log::error!`
+
+- [ ] **Step 1: Dep + builder**
+
+```toml
+tauri-plugin-log = "2"
+```
+
+```rust
+.plugin(
+    tauri_plugin_log::Builder::default()
+        .targets([
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: Some("cpa-desktop".into()) }),
+        ])
+        .level(log::LevelFilter::Info)
+        .max_file_size(2 * 1024 * 1024)
+        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+        .build(),
+)
+```
+
+- [ ] **Step 2: Sweep `8087`**
+
+```bash
+rg -n "\b8087\b" src-tauri src
+```
+
+Replace each Rust occurrence with `app_config::DEFAULT_PORT`; replace each TS occurrence with the value returned from `get_settings()` (or a frontend constant in `src/constants.ts`).
+
+- [ ] **Step 3: Sweep ad-hoc log writes**
+
+Replace `eprintln!("...")` / `writeln!(app_log, "...")` with `log::info!`/`log::warn!`/`log::error!`. Keep panic-log file (Task 11) since panics must be captured even before plugin-log is initialised.
+
+- [ ] **Step 4: Verify + commit**
+
+```bash
+cargo fmt --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+git add src-tauri/ src/
+git commit -m "refactor: tauri-plugin-log for structured rotated logs; hoist DEFAULT_PORT"
+```
+
+---
+
 ## Task 12: Frontend ErrorBoundary + `report_frontend_error` command
 
 **Files:**
@@ -1249,6 +1702,77 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 git add .
 git commit -m "feat: frontend ErrorBoundary + report_frontend_error command"
+```
+
+---
+
+## Task 12b: `CpaStatus` as TypeScript discriminated union
+
+Today the frontend uses the loose `CpaStatus = 'Idle' | 'Stopped' | 'Starting' | 'Running' | { Error: string }` and string-matches on `'Running'` literals everywhere. Two issues:
+
+- `serde`'s untagged enum produces `{ "Error": "..." }` on payload, but `'Idle'` produces a bare string — ad-hoc consumers in `Sidebar`, `StatusBar`, `Dashboard` each re-implement narrowing.
+- Adding a new variant (e.g. `Updating`) requires sweeping 6+ files.
+
+Switch to `#[serde(tag = "kind", content = "data")]` on Rust and a typed union + helper guards on the frontend.
+
+**Files:**
+- Modify: `src-tauri/src/cpa_manager.rs`
+- Modify: `src/types/cpa.ts` (new)
+- Modify: `src/lib/cpaStatus.ts` (new — guards)
+- Modify: `src/stores/*.ts`, `src/components/{StatusBar,Sidebar,Dashboard}.tsx`
+
+- [ ] **Step 1: Rust**
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", content = "data")]
+pub enum CpaStatus {
+    Idle,
+    Stopped,
+    Starting,
+    Running,
+    Error(String),
+}
+```
+
+> This is a breaking change to the wire format. Bump `schema_version` (Task 8b) and migrate any persisted status copy.
+
+- [ ] **Step 2: Frontend types + guards**
+
+`src/types/cpa.ts`:
+
+```ts
+export type CpaStatus =
+  | { kind: 'Idle' }
+  | { kind: 'Stopped' }
+  | { kind: 'Starting' }
+  | { kind: 'Running' }
+  | { kind: 'Error'; data: string }
+```
+
+`src/lib/cpaStatus.ts`:
+
+```ts
+export const isRunning = (s: CpaStatus) => s.kind === 'Running'
+export const isStarting = (s: CpaStatus) => s.kind === 'Starting'
+export const errorOf = (s: CpaStatus) => (s.kind === 'Error' ? s.data : null)
+```
+
+- [ ] **Step 3: Sweep callsites**
+
+```bash
+rg -n "'Running'|'Starting'|'Stopped'|CpaStatus" src
+```
+
+Replace string comparisons with `isRunning(status)` etc.
+
+- [ ] **Step 4: Update tests + commit**
+
+```bash
+npm run typecheck && npm run test:run
+cargo test --manifest-path src-tauri/Cargo.toml
+git add .
+git commit -m "refactor: CpaStatus as tagged union end-to-end; remove string-match narrowing"
 ```
 
 ---
@@ -2426,25 +2950,93 @@ Update header: `Status: Complete`. Commit.
 
 ---
 
+# Polish patches to existing tasks
+
+Small patches that ride on existing tasks rather than warranting their own. Apply each as part of the parent task's commit.
+
+### Patch 15.1 — `auto_start` defaults to `false`
+
+In Task 15 Step 1 (`Settings::default()`), set `auto_start: false`. CPA spawning a child process before the user has consented (or before a binary is present) is surprising on first launch. Show the user a clear "Start CPA" affordance in the empty-state Dashboard (already covered by Task 25). Add a one-time banner: "Auto-start is off — enable in Settings to start CPA on launch."
+
+### Patch 19.1 — Bundle metadata + version sync
+
+In Task 19, before triggering `tauri-action`, add a `sync-version` step:
+
+```yaml
+- name: Sync versions
+  run: |
+    node -e "const v=require('./package.json').version; \
+      const f='src-tauri/tauri.conf.json'; \
+      const j=JSON.parse(require('fs').readFileSync(f,'utf8')); \
+      j.version = v; \
+      require('fs').writeFileSync(f, JSON.stringify(j,null,2)+'\n');"
+    sed -i.bak 's/^version = .*/version = "'$(node -p "require('./package.json').version")'"/' src-tauri/Cargo.toml && rm src-tauri/Cargo.toml.bak
+```
+
+Also ensure `tauri.conf.json` carries `productName`, `identifier` (`com.cpa.desktop`), `copyright`, `category`, `shortDescription`, `longDescription` — required for clean DMG/MSI metadata.
+
+### Patch 22.1 — Global `<Toaster />` mount
+
+Step 1 of Task 22 introduces `Toast`. Add:
+
+```tsx
+// src/components/ui/Toaster.tsx
+export function Toaster() { /* portal-mounts queue from useToastStore */ }
+```
+
+Mount once in `App.tsx` so any feature can call `toast.success(...)` / `toast.error(...)` without rendering its own container. Use it in Tasks 14 (download progress), 15 (update toast), 16 (port conflict resolution), 30 (backup created).
+
+### Patch 24.1 — Persist log filters in settings
+
+In Task 24, store the current `levelFilter` and `searchQuery` in `useSettingsStore` with debounced (300ms) persistence to `settings.json`. Avoids losing the filter across restarts and across navigations away from the Logs page.
+
+```ts
+const { logFilter, setLogFilter } = useSettingsStore()
+```
+
+Add `logFilter: { levels: LogLevel[]; query: string }` to `Settings` (Rust + TS). Bump `schema_version` if Task 8b's bump hasn't already happened.
+
+### Patch 33.1 — Resumable download retries on transient failure
+
+In Task 33 Step 2, when the Range request returns a 5xx or the stream errors, retry up to 3 times with exponential backoff (1s, 2s, 4s) before surfacing a user-actionable "Retry" button via the global `<Toaster />` (Patch 22.1). Cap total elapsed retry time at 30s; afterward, the user must click Retry.
+
+```rust
+let mut backoff = std::time::Duration::from_secs(1);
+for attempt in 0..3 {
+    match try_download_chunk(&url, range).await {
+        Ok(b) => return Ok(b),
+        Err(e) if attempt < 2 => {
+            log::warn!("download chunk failed (attempt {attempt}): {e}; retrying in {:?}", backoff);
+            tokio::time::sleep(backoff).await;
+            backoff *= 2;
+        }
+        Err(e) => return Err(e),
+    }
+}
+```
+
+---
+
 # Self-review checklist
 
 Run after writing this plan; fix issues inline.
 
 1. **Spec coverage:** every spec section §2.x and §3.x maps to a Task above:
    - §2.1 → Tasks 1, 2, 3, 4
-   - §2.2 → Tasks 0, 5, 6, 7
-   - §2.3 → Tasks 11, 12, 13
-   - §2.4 → Tasks 14, 15
-   - §2.5 → Tasks 8, 9, 10, 16, 17
-   - §2.6 → Tasks 18, 19
+   - §2.2 → Tasks 0, 5, 5b, 6, 7
+   - §2.3 → Tasks 11, 11b, 12, 12b, 13
+   - §2.4 → Tasks 14, 15 (+ Patch 15.1)
+   - §2.5 → Tasks 8, 8b, 9, 9b, 10, 16, 17
+   - §2.6 → Tasks 18, 19 (+ Patch 19.1)
    - §2.7 → Task 20
-   - §3.1 → Tasks 21, 22
+   - §3.1 → Tasks 21, 22 (+ Patch 22.1)
    - §3.2 → Tasks 30, 31, 32
-   - §3.3 → Tasks 23, 24, 25, 26
+   - §3.3 → Tasks 23, 24 (+ Patch 24.1), 25, 26
    - §3.4 → Task 29
    - §3.5 → Task 28
-   - §3.6 → Task 34
+   - §3.6 → Tasks 33 (+ Patch 33.1), 34
    - §5b global CI rule → applied as VERIFY-ALL block, enforced per-task
+   - **Polish items added 2026-04-27:** Tasks 5b, 8b, 9b, 11b, 12b, plus Patches 15.1, 19.1, 22.1, 24.1, 33.1 (16 items, see commit history)
 
 2. **Placeholder scan:** no `TBD`/`TODO`/"implement later" in committed code paths. Two acceptable comment markers:
    - `// adapt to existing variables` — instruction to engineer about call-site mapping, not unfinished code.
