@@ -103,3 +103,27 @@ pub fn check_process_alive(state: &SharedCpaState) -> bool {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_serializes_per_camelcase_rename() {
+        let s = serde_json::to_string(&CpaStatus::Idle).unwrap();
+        assert_eq!(s, "\"idle\"");
+    }
+
+    #[test]
+    fn running_serializes_per_camelcase_rename() {
+        let s = serde_json::to_string(&CpaStatus::Running).unwrap();
+        assert_eq!(s, "\"running\"");
+    }
+
+    #[test]
+    fn error_serializes_as_object() {
+        let s = serde_json::to_string(&CpaStatus::Error("boom".into())).unwrap();
+        assert!(s.contains("\"error\""));
+        assert!(s.contains("\"boom\""));
+    }
+}

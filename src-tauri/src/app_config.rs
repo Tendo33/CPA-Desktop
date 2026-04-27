@@ -93,3 +93,29 @@ pub fn ensure_config_yaml(app: &tauri::AppHandle) -> Result<(), String> {
     let example = include_str!("../assets/config.example.yaml");
     std::fs::write(&path, example).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    fn parse_port(yaml: &str) -> Result<u16, String> {
+        let val: serde_yaml::Value = serde_yaml::from_str(yaml).map_err(|e| e.to_string())?;
+        val.get("port")
+            .and_then(|v| v.as_u64())
+            .map(|p| p as u16)
+            .ok_or_else(|| "port not found".to_string())
+    }
+
+    #[test]
+    fn parses_valid_port() {
+        assert_eq!(parse_port("port: 8317\n").unwrap(), 8317);
+    }
+
+    #[test]
+    fn rejects_missing_port() {
+        assert!(parse_port("other: 1\n").is_err());
+    }
+
+    #[test]
+    fn rejects_string_port() {
+        assert!(parse_port("port: \"abc\"\n").is_err());
+    }
+}

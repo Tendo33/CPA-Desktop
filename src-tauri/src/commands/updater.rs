@@ -13,25 +13,23 @@ pub struct UpdateCheckResult {
 }
 
 fn asset_name(version: &str) -> String {
-    let os = if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "darwin"
-    } else {
-        "linux"
+    asset_name_for(version, std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn asset_name_for(version: &str, os: &str, arch: &str) -> String {
+    let os_tag = match os {
+        "windows" => "windows",
+        "macos" => "darwin",
+        _ => "linux",
     };
-    let arch = match std::env::consts::ARCH {
+    let arch_tag = match arch {
         "x86_64" => "amd64",
         "aarch64" => "arm64",
         other => other,
     };
-    let ext = if cfg!(target_os = "windows") {
-        "zip"
-    } else {
-        "tar.gz"
-    };
+    let ext = if os == "windows" { "zip" } else { "tar.gz" };
     let ver = version.trim_start_matches('v');
-    format!("CLIProxyAPI_{ver}_{os}_{arch}.{ext}")
+    format!("CLIProxyAPI_{ver}_{os_tag}_{arch_tag}.{ext}")
 }
 
 #[derive(Deserialize)]
@@ -221,4 +219,33 @@ fn extract_targz(data: &[u8], binary_name: &str, dest: &std::path::Path) -> Resu
         }
     }
     Err(format!("{binary_name} not found in tar.gz"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_x64() {
+        assert_eq!(
+            asset_name_for("v1.2.3", "windows", "x86_64"),
+            "CLIProxyAPI_1.2.3_windows_amd64.zip"
+        );
+    }
+
+    #[test]
+    fn macos_arm64_strips_v() {
+        assert_eq!(
+            asset_name_for("v1.0.0", "macos", "aarch64"),
+            "CLIProxyAPI_1.0.0_darwin_arm64.tar.gz"
+        );
+    }
+
+    #[test]
+    fn linux_x64_no_v_prefix() {
+        assert_eq!(
+            asset_name_for("0.5.0", "linux", "x86_64"),
+            "CLIProxyAPI_0.5.0_linux_amd64.tar.gz"
+        );
+    }
 }
