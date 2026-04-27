@@ -1,8 +1,10 @@
 pub mod app_config;
 pub mod commands;
+pub mod cpa_lifecycle;
 pub mod cpa_manager;
 pub mod log_stream;
 pub mod tray;
+pub mod util;
 
 use std::sync::OnceLock;
 

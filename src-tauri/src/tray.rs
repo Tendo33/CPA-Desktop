@@ -1,10 +1,12 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Listener, Manager,
+    AppHandle, Listener, Manager,
 };
 
-use crate::cpa_manager::{CpaStatus, SharedCpaState};
+use crate::cpa_manager::CpaStatus;
+
+const TRAY_ID: &str = "main";
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItemBuilder::new("Open Dashboard")
@@ -27,8 +29,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit)
         .build()?;
 
-    let app2 = app.clone();
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id(TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .tooltip("CPA Desktop — Stopped")
@@ -36,20 +37,13 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             "show" => show_main_window(app),
             "start" => {
                 let app_c = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    tray_start_cpa(app_c).await;
+                crate::util::spawn::supervised(async move {
+                    let _ = crate::cpa_lifecycle::start(app_c).await;
                 });
             }
-            "stop" => {
-                if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
-                    crate::cpa_manager::kill_cpa(&cpa_state);
-                    let _ = app.emit("cpa:status", &CpaStatus::Stopped);
-                }
-            }
+            "stop" => crate::cpa_lifecycle::stop(app),
             "quit" => {
-                if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
-                    crate::cpa_manager::kill_cpa(&cpa_state);
-                }
+                crate::cpa_lifecycle::stop(app);
                 app.exit(0);
             }
             _ => {}
@@ -59,98 +53,24 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 show_main_window(tray.app_handle());
             }
         })
-        .build(&app2)?;
+        .build(app)?;
 
-    // Update tray tooltip whenever CPA status changes
     let app3 = app.clone();
     app.listen("cpa:status", move |event| {
-        let payload = event.payload();
-        // Try to detect status string from JSON payload
-        let tooltip = if payload.contains("running") || payload.contains("Running") {
-            "CPA Desktop — Running ✓"
-        } else if payload.contains("starting") || payload.contains("Starting") {
-            "CPA Desktop — Starting…"
-        } else if payload.contains("error") || payload.contains("Error") {
-            "CPA Desktop — Error"
-        } else if payload.contains("idle") || payload.contains("Idle") {
-            "CPA Desktop — Not downloaded"
-        } else {
-            "CPA Desktop — Stopped"
+        let tooltip = match serde_json::from_str::<CpaStatus>(event.payload()) {
+            Ok(CpaStatus::Running) => "CPA Desktop — Running ✓",
+            Ok(CpaStatus::Starting) => "CPA Desktop — Starting…",
+            Ok(CpaStatus::Stopped) => "CPA Desktop — Stopped",
+            Ok(CpaStatus::Idle) => "CPA Desktop — Not downloaded",
+            Ok(CpaStatus::Error(_)) => "CPA Desktop — Error",
+            Err(_) => "CPA Desktop",
         };
-        if let Some(tray) = app3.tray_by_id("") {
+        if let Some(tray) = app3.tray_by_id(TRAY_ID) {
             let _ = tray.set_tooltip(Some(tooltip));
         }
     });
 
     Ok(())
-}
-
-/// Start CPA from tray context (mirrors commands::cpa::start_cpa logic).
-async fn tray_start_cpa(app: AppHandle) {
-    use crate::app_config;
-
-    let cpa_state = match app.try_state::<SharedCpaState>() {
-        Some(s) => s.inner().clone(),
-        None => return,
-    };
-    let log_buf = match app.try_state::<crate::log_stream::LogBuffer>() {
-        Some(b) => b.inner().clone(),
-        None => return,
-    };
-
-    let port = cpa_state.lock().unwrap().port;
-    let binary = app_config::cpa_binary_path(&app);
-
-    if !binary.exists() {
-        let _ = app.emit("cpa:status", &CpaStatus::Idle);
-        return;
-    }
-
-    // Check if already running
-    if super::http_ping(port).await {
-        cpa_state.lock().unwrap().status = CpaStatus::Running;
-        let _ = app.emit("cpa:status", &CpaStatus::Running);
-        return;
-    }
-
-    let working_dir = app_config::data_dir(&app);
-    match crate::cpa_manager::spawn_cpa(&binary, &working_dir, &cpa_state) {
-        Ok(output) => {
-            let _ = app.emit("cpa:status", &CpaStatus::Starting);
-            crate::log_stream::pipe_process_output(
-                app.clone(),
-                log_buf,
-                output.stdout,
-                output.stderr,
-            );
-
-            let app2 = app.clone();
-            let state2 = cpa_state.clone();
-            tauri::async_runtime::spawn(async move {
-                for _ in 0..30u32 {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    if super::http_ping(port).await {
-                        state2.lock().unwrap().status = CpaStatus::Running;
-                        let _ = app2.emit("cpa:status", &CpaStatus::Running);
-                        super::spawn_health_monitor(app2.clone(), state2, port);
-                        return;
-                    }
-                    if !crate::cpa_manager::check_process_alive(&state2) {
-                        let msg = "CPA process exited".to_string();
-                        state2.lock().unwrap().status = CpaStatus::Error(msg.clone());
-                        let _ = app2.emit("cpa:status", &CpaStatus::Error(msg));
-                        return;
-                    }
-                }
-                let msg = "CPA failed to start within 30s".to_string();
-                state2.lock().unwrap().status = CpaStatus::Error(msg.clone());
-                let _ = app2.emit("cpa:status", &CpaStatus::Error(msg));
-            });
-        }
-        Err(e) => {
-            let _ = app.emit("cpa:status", &CpaStatus::Error(e));
-        }
-    }
 }
 
 fn show_main_window(app: &AppHandle) {
