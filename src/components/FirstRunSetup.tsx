@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { checkCpaUpdate, downloadCpaUpdate, type UpdateCheckResult } from '@/lib/tauri'
 import { listen } from '@tauri-apps/api/event'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   onComplete: () => void
 }
 
 export function FirstRunSetup({ onComplete }: Props) {
+  const t = useT()
   const [update, setUpdate]         = useState<UpdateCheckResult | null>(null)
   const [checking, setChecking]     = useState(true)
   const [downloading, setDownloading] = useState(false)
@@ -103,8 +105,7 @@ export function FirstRunSetup({ onComplete }: Props) {
           marginBottom: 32,
           maxWidth: 280,
         }}>
-          The CLIProxyAPI binary needs to be downloaded before you can start.
-          {' '}This is a one-time setup.
+          {t.firstRun.description}
         </p>
 
         {/* States */}
@@ -118,7 +119,7 @@ export function FirstRunSetup({ onComplete }: Props) {
               animation: 'spin 0.8s linear infinite',
               flexShrink: 0,
             }} />
-            Checking latest release…
+            {t.firstRun.checkingRelease}
           </div>
         )}
 
@@ -132,7 +133,7 @@ export function FirstRunSetup({ onComplete }: Props) {
               fontSize: 12,
               color: 'var(--c-text-3)',
             }}>
-              Latest:{' '}
+              {t.firstRun.latestLabel}{' '}
               <span style={{ color: 'var(--c-text-1)', fontWeight: 500 }}>
                 {update.latestVersion}
               </span>
@@ -143,7 +144,7 @@ export function FirstRunSetup({ onComplete }: Props) {
               className="btn btn-primary"
               style={{ fontSize: 13, padding: '9px 28px', width: '100%', justifyContent: 'center' }}
             >
-              Download CLIProxyAPI
+              {t.firstRun.downloadBtn}
             </button>
           </div>
         )}
@@ -170,7 +171,7 @@ export function FirstRunSetup({ onComplete }: Props) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Downloading…</span>
+              <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>{t.firstRun.downloading}</span>
               <span style={{ fontSize: 12, color: 'var(--c-text-2)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                 {progress}%
               </span>
@@ -195,7 +196,7 @@ export function FirstRunSetup({ onComplete }: Props) {
 
         {!checking && !update && !error && (
           <p style={{ fontSize: 12, color: 'var(--c-text-3)', textAlign: 'center' }}>
-            Could not fetch release info. Check your internet connection.
+            {t.firstRun.noInternet}
           </p>
         )}
       </div>

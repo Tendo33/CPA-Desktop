@@ -10,9 +10,11 @@ import { useCpaStore } from '@/stores/cpa'
 import { listen } from '@tauri-apps/api/event'
 import { getVersion } from '@tauri-apps/api/app'
 import { ArrowUpRight } from 'lucide-react'
+import { useT } from '@/lib/i18n'
 
 export function AboutPage() {
   const { status } = useCpaStore()
+  const t = useT()
   const [appVersion, setAppVersion]   = useState('')
   const [update, setUpdate]           = useState<UpdateCheckResult | null>(null)
   const [checking, setChecking]       = useState(false)
@@ -96,14 +98,14 @@ export function AboutPage() {
               CPA Desktop
             </h1>
             <p style={{ fontSize: 12, color: 'var(--c-text-3)', marginTop: 4 }}>
-              Desktop manager for CLIProxyAPI
+              {t.about.subtitle}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 16, marginTop: 2 }}>
-            <VersionChip label="App" value={`v${appVersion}`} />
+            <VersionChip label={t.about.appLabel} value={`v${appVersion}`} />
             {update?.currentVersion && (
-              <VersionChip label="CPA" value={update.currentVersion} />
+              <VersionChip label={t.about.cpaLabel} value={update.currentVersion} />
             )}
           </div>
         </div>
@@ -114,7 +116,7 @@ export function AboutPage() {
             fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--c-accent)',
           }}>
-            CLIProxyAPI Binary
+            {t.about.binarySection}
           </span>
 
           {update && (
@@ -129,14 +131,14 @@ export function AboutPage() {
               }}
             >
               <div>
-                <p style={{ fontSize: 10, color: 'var(--c-text-3)', marginBottom: 3 }}>Installed</p>
+                <p style={{ fontSize: 10, color: 'var(--c-text-3)', marginBottom: 3 }}>{t.about.installed}</p>
                 <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-1)' }}>
                   {update.currentVersion ?? '—'}
                 </p>
               </div>
               <div style={{ width: 1, background: 'var(--c-border-sub)', alignSelf: 'stretch' }} />
               <div>
-                <p style={{ fontSize: 10, color: 'var(--c-text-3)', marginBottom: 3 }}>Latest</p>
+                <p style={{ fontSize: 10, color: 'var(--c-text-3)', marginBottom: 3 }}>{t.about.latest}</p>
                 <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-1)' }}>
                   {update.latestVersion}
                 </p>
@@ -144,7 +146,7 @@ export function AboutPage() {
               {!update.updateAvailable && !done && (
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: 'var(--c-run)', fontWeight: 500 }}>
-                    ✓ Up to date
+                    {t.about.upToDate}
                   </span>
                 </div>
               )}
@@ -170,13 +172,13 @@ export function AboutPage() {
                   }}
                 />
               </div>
-              <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{pct}% downloaded</span>
+              <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{t.about.downloaded(pct)}</span>
             </div>
           )}
 
           {done && (
             <p style={{ fontSize: 12, color: 'var(--c-run)', fontWeight: 500 }}>
-              ✓ Updated — CPA is restarting
+              {t.about.updated}
             </p>
           )}
 
@@ -191,7 +193,7 @@ export function AboutPage() {
               disabled={checking || downloading}
               className="btn btn-ghost"
             >
-              {checking ? 'Checking…' : 'Check for Updates'}
+              {checking ? t.about.checking : t.about.checkUpdates}
             </button>
 
             {update?.updateAvailable && !done && (
@@ -200,7 +202,7 @@ export function AboutPage() {
                 disabled={downloading}
                 className="btn btn-primary"
               >
-                {downloading ? `Downloading ${pct}%` : `Update to ${update.latestVersion}`}
+                {downloading ? t.about.downloading(pct) : t.about.updateTo(update.latestVersion)}
               </button>
             )}
           </div>
@@ -212,7 +214,7 @@ export function AboutPage() {
             fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--c-accent)',
           }}>
-            Links
+            {t.about.links}
           </span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {LINKS.map(({ label, url }) => (

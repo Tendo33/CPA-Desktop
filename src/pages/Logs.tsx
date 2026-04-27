@@ -3,20 +3,22 @@ import { LogList } from '@/components/LogList'
 import { useLogStore } from '@/stores/logs'
 import { clearLogs } from '@/lib/tauri'
 import { Trash2 } from 'lucide-react'
+import { useT } from '@/lib/i18n'
 
 type Level = 'all' | 'stdout' | 'stderr'
 
-const LEVELS: { id: Level; label: string }[] = [
-  { id: 'all',    label: 'All' },
-  { id: 'stdout', label: 'Out' },
-  { id: 'stderr', label: 'Err' },
-]
-
 export function Logs() {
   const { lines, clear } = useLogStore()
+  const t = useT()
   const [search, setSearch]           = useState('')
   const [autoScroll, setAutoScroll]   = useState(true)
   const [levelFilter, setLevelFilter] = useState<Level>('all')
+
+  const LEVELS: { id: Level; label: string }[] = [
+    { id: 'all',    label: t.logs.all },
+    { id: 'stdout', label: t.logs.out },
+    { id: 'stderr', label: t.logs.err },
+  ]
 
   const filtered = lines.filter((l) => {
     if (levelFilter !== 'all' && l.level !== levelFilter) return false
@@ -44,7 +46,7 @@ export function Logs() {
       >
         {/* Search */}
         <input
-          placeholder="Filter…"
+          placeholder={t.logs.filter}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="selectable"
@@ -119,7 +121,7 @@ export function Logs() {
           >
             <span className="toggle-thumb" />
           </button>
-          <span style={{ userSelect: 'none' }}>Tail</span>
+          <span style={{ userSelect: 'none' }}>{t.logs.tail}</span>
         </label>
 
         {/* Count */}
@@ -133,14 +135,14 @@ export function Logs() {
           }}
         >
           {filtered.length !== lines.length
-            ? `${filtered.length} / ${lines.length}`
-            : `${lines.length} lines`}
+            ? t.logs.filteredLines(filtered.length, lines.length)
+            : t.logs.lines(lines.length)}
         </span>
 
         {/* Clear */}
         <button
           onClick={handleClear}
-          title="Clear logs"
+          title={t.logs.clearLogs}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -188,7 +190,7 @@ export function Logs() {
             <span style={{ fontSize: 14, color: 'var(--c-text-3)' }}>≡</span>
           </div>
           <p style={{ fontSize: 12, color: 'var(--c-text-3)' }}>
-            No output yet — start CPA to see logs
+            {t.logs.noOutput}
           </p>
         </div>
       ) : (

@@ -70,6 +70,9 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
   ({ url, visible }, ref) => {
     const wvRef = useRef<Webview | null>(null)
     const tokenRef = useRef(0)
+    // Keep a ref so spawn() closure always sees latest visible
+    const visibleRef = useRef(visible)
+    visibleRef.current = visible
 
     const spawn = (u: string) => {
       const token = ++tokenRef.current
@@ -80,7 +83,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
             return
           }
           wvRef.current = wv
-          if (visible) {
+          if (visibleRef.current) {
             wv.show()
             wv.setFocus().catch(() => {})
           } else {
@@ -92,8 +95,14 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
 
     useImperativeHandle(ref, () => ({ reload: () => spawn(url) }))
 
-    // Spawn when url changes
+    // Spawn when url changes while visible, or when visible becomes true.
+    // When visible becomes false, just hide the existing webview.
+    // This ensures the webview always loads a fresh URL when CPA starts running.
     useEffect(() => {
+      if (!visible) {
+        wvRef.current?.hide()
+        return
+      }
       const t = setTimeout(() => spawn(url), 150)
       return () => {
         clearTimeout(t)
@@ -102,19 +111,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
         wvRef.current = null
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url])
-
-    // Show/hide
-    useEffect(() => {
-      const wv = wvRef.current
-      if (!wv) return
-      if (visible) {
-        wv.show()
-        wv.setFocus().catch(() => {})
-      } else {
-        wv.hide()
-      }
-    }, [visible])
+    }, [url, visible])
 
     // Resize handler
     useEffect(() => {

@@ -1,21 +1,13 @@
 import { useCpaStore } from '@/stores/cpa'
 import { startCpa, stopCpa } from '@/lib/tauri'
 import type { CpaStatus } from '@/lib/tauri'
+import { useT } from '@/lib/i18n'
 
 function dotClass(status: CpaStatus): string {
   if (status === 'Running')  return 'status-dot running'
   if (status === 'Starting') return 'status-dot starting'
   if (typeof status === 'object') return 'status-dot error'
   return 'status-dot idle'
-}
-
-function statusText(status: CpaStatus): string {
-  if (status === 'Running')  return 'Running'
-  if (status === 'Starting') return 'Starting'
-  if (status === 'Stopped')  return 'Stopped'
-  if (status === 'Idle')     return 'Not started'
-  if (typeof status === 'object') return 'Error'
-  return String(status)
 }
 
 function statusColor(status: CpaStatus): string {
@@ -27,9 +19,19 @@ function statusColor(status: CpaStatus): string {
 
 export function StatusBar() {
   const { status, port } = useCpaStore()
-  const isRunning = status === 'Running'
+  const t = useT()
+  const isRunning  = status === 'Running'
   const isStarting = status === 'Starting'
-  const errorMsg = typeof status === 'object' ? (status as { error: string }).error : null
+  const errorMsg   = typeof status === 'object' ? (status as { error: string }).error : null
+
+  function statusText(s: CpaStatus): string {
+    if (s === 'Running')  return t.status.running
+    if (s === 'Starting') return t.status.starting
+    if (s === 'Stopped')  return t.status.stopped
+    if (s === 'Idle')     return t.status.notStarted
+    if (typeof s === 'object') return t.status.error
+    return String(s)
+  }
 
   return (
     <div
@@ -139,7 +141,7 @@ export function StatusBar() {
           }
         }}
       >
-        {isRunning ? 'Stop' : isStarting ? 'Starting…' : 'Start'}
+        {isRunning ? t.status.stop : isStarting ? t.status.startingEllipsis : t.status.start}
       </button>
     </div>
   )

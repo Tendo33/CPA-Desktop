@@ -1,13 +1,8 @@
-import { LayoutDashboard, ScrollText, Settings, Info } from 'lucide-react'
+import { LayoutDashboard, ScrollText, Settings, Info, Sun, Moon } from 'lucide-react'
+import { useSettingsStore, type Theme, type Lang } from '@/stores/settings'
+import { useT } from '@/lib/i18n'
 
 export type Page = 'dashboard' | 'logs' | 'settings' | 'about'
-
-const NAV: { id: Page; label: string; icon: React.ElementType }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'logs',      label: 'Logs',      icon: ScrollText },
-  { id: 'settings',  label: 'Settings',  icon: Settings },
-  { id: 'about',     label: 'About',     icon: Info },
-]
 
 interface Props {
   current: Page
@@ -15,6 +10,19 @@ interface Props {
 }
 
 export function Sidebar({ current, onChange }: Props) {
+  const t = useT()
+  const { theme, lang, setTheme, setLang } = useSettingsStore()
+
+  const NAV: { id: Page; label: string; icon: React.ElementType }[] = [
+    { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
+    { id: 'logs',      label: t.nav.logs,      icon: ScrollText },
+    { id: 'settings',  label: t.nav.settings,  icon: Settings },
+    { id: 'about',     label: t.nav.about,     icon: Info },
+  ]
+
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
+  const toggleLang  = () => setLang(lang === 'en' ? 'zh' : 'en')
+
   return (
     <nav
       style={{
@@ -76,24 +84,76 @@ export function Sidebar({ current, onChange }: Props) {
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Bottom decoration — tiny version hint */}
+      {/* Bottom controls: theme + lang toggles */}
       <div
         style={{
-          height: 40,
+          padding: '8px 6px 12px',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
+          gap: 4,
         }}
       >
-        <div
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: '50%',
-            background: 'var(--c-border)',
-          }}
-        />
+        {/* Theme toggle: sun/moon */}
+        <SidebarIconBtn
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={toggleTheme}
+        >
+          {theme === 'dark'
+            ? <Sun  size={15} strokeWidth={1.75} />
+            : <Moon size={15} strokeWidth={1.75} />}
+        </SidebarIconBtn>
+
+        {/* Language toggle: EN / 中 */}
+        <SidebarIconBtn
+          title={lang === 'en' ? '切换为中文' : 'Switch to English'}
+          onClick={toggleLang}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>
+            {lang === 'en' ? '中' : 'EN'}
+          </span>
+        </SidebarIconBtn>
       </div>
     </nav>
+  )
+}
+
+function SidebarIconBtn({
+  children,
+  title,
+  onClick,
+}: {
+  children: React.ReactNode
+  title: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 36,
+        height: 30,
+        borderRadius: 6,
+        border: 'none',
+        background: 'transparent',
+        color: 'var(--c-text-3)',
+        cursor: 'pointer',
+        transition: 'color 130ms ease, background 130ms ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = 'var(--c-text-2)'
+        e.currentTarget.style.background = 'var(--c-hover)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = 'var(--c-text-3)'
+        e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      {children}
+    </button>
   )
 }

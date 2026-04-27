@@ -8,6 +8,7 @@ import { SettingsPage } from '@/pages/Settings'
 import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
 import { useLogStore } from '@/stores/logs'
+import { useSettingsStore } from '@/stores/settings'
 import { cpaBinaryExists } from '@/lib/tauri'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 
@@ -19,6 +20,13 @@ export default function App() {
   const { initialize: initCpa } = useCpaStore()
   const { initialize: initLogs } = useLogStore()
   const unlistenRefs = useRef<UnlistenFn[]>([])
+
+  const theme = useSettingsStore((s) => s.theme)
+
+  // Apply theme to document root so CSS :root[data-theme] selector works
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     cpaBinaryExists().then(setBinaryReady)

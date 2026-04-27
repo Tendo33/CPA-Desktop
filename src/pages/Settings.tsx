@@ -14,6 +14,7 @@ import {
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
 import { FolderOpen, RefreshCw } from 'lucide-react'
+import { useT } from '@/lib/i18n'
 
 /* ── Toggle Switch ─────────────────────────────────────────────────────── */
 function Toggle({
@@ -111,6 +112,7 @@ function Row({
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
   const { status } = useCpaStore()
+  const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [yaml, setYaml]         = useState('')
   const [saving, setSaving]     = useState(false)
@@ -135,7 +137,7 @@ export function SettingsPage() {
     try {
       await setAutolaunchEnabled(checked)
       setAutolaunch(checked)
-      flash(checked ? 'Will launch on system login' : 'Removed from startup')
+      flash(checked ? t.settings.loginEnabled : t.settings.loginDisabled)
     } catch (e) {
       flash(`Error: ${e}`)
     }
@@ -146,7 +148,7 @@ export function SettingsPage() {
     setSaving(true)
     try {
       await saveSettings(settings)
-      flash('Saved')
+      flash(t.settings.savedMsg)
     } catch (e) {
       flash(String(e))
     }
@@ -158,7 +160,7 @@ export function SettingsPage() {
     setSaving(true)
     try {
       await writeConfigYaml(yaml)
-      flash('config.yaml saved')
+      flash(t.settings.configSaved)
     } catch (e) {
       setYamlError(String(e))
     }
@@ -173,7 +175,7 @@ export function SettingsPage() {
   if (!settings) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--c-text-3)', fontSize: 12 }}>
-        Loading…
+        {t.settings.loading}
       </div>
     )
   }
@@ -188,11 +190,11 @@ export function SettingsPage() {
       <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
 
         {/* ── Application ─────────────────────────────────────────── */}
-        <Section title="Application">
-          <Row first label="CPA Port" hint={portMismatch ? `config.yaml uses :${yamlPort}` : 'Port CPA listens on'}>
+        <Section title={t.settings.application}>
+          <Row first label={t.settings.cpaPort} hint={portMismatch ? t.settings.portMismatch(yamlPort!) : t.settings.portHint}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {portMismatch && (
-                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>⚠ mismatch</span>
+                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>{t.settings.mismatch}</span>
               )}
               <input
                 type="number"
@@ -220,14 +222,14 @@ export function SettingsPage() {
             </div>
           </Row>
 
-          <Row label="Auto-start CPA" hint="Launch CPA when the app opens">
+          <Row label={t.settings.autoStartCpa} hint={t.settings.autoStartHint}>
             <Toggle
               checked={settings.autoStart}
               onChange={(v) => setSettings({ ...settings, autoStart: v })}
             />
           </Row>
 
-          <Row label="Launch on login" hint="Start CPA Desktop at system login">
+          <Row label={t.settings.launchOnLogin} hint={t.settings.launchOnLoginHint}>
             <Toggle checked={autolaunch} onChange={handleAutolaunchChange} />
           </Row>
         </Section>
@@ -239,17 +241,17 @@ export function SettingsPage() {
             disabled={saving}
             className="btn btn-primary"
           >
-            {saving ? 'Saving…' : 'Save Settings'}
+            {saving ? t.settings.saving : t.settings.saveSettings}
           </button>
 
           <button onClick={openDataDir} className="btn btn-ghost">
             <FolderOpen size={12} strokeWidth={1.75} />
-            Data Folder
+            {t.settings.dataFolder}
           </button>
 
           <button onClick={handleRestartCpa} className="btn btn-ghost">
             <RefreshCw size={12} strokeWidth={1.75} />
-            Restart CPA
+            {t.settings.restartCpa}
           </button>
 
           {msg && (
@@ -261,7 +263,7 @@ export function SettingsPage() {
 
         {/* ── config.yaml ─────────────────────────────────────────── */}
         <Section
-          title="config.yaml"
+          title={t.settings.configYaml}
           action={
             <button
               onClick={handleSaveYaml}
@@ -269,7 +271,7 @@ export function SettingsPage() {
               className="btn btn-primary"
               style={{ fontSize: 11, padding: '3px 10px' }}
             >
-              Save & Apply
+              {t.settings.saveApply}
             </button>
           }
         >
@@ -310,7 +312,7 @@ export function SettingsPage() {
         </Section>
 
         <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>
-          Restart CPA after saving config changes for them to take effect.
+          {t.settings.restartNote}
         </p>
       </div>
     </div>

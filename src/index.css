@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=optional");
 @import "tailwindcss";
 
-/* ─── Design Tokens ─────────────────────────────────────────────────────── */
+/* ─── Design Tokens — Dark (default) ───────────────────────────────────── */
 :root {
   /* Backgrounds */
   --c-bg:         oklch(10.5% 0.008 255);
@@ -36,6 +36,38 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color-scheme: dark;
+}
+
+/* ─── Design Tokens — Light ─────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  /* Backgrounds */
+  --c-bg:         oklch(97%   0.004 255);
+  --c-surface:    oklch(100%  0     0);
+  --c-raised:     oklch(94%   0.005 255);
+  --c-hover:      oklch(91%   0.006 255);
+
+  /* Borders */
+  --c-border:     oklch(84%   0.007 255);
+  --c-border-sub: oklch(90%   0.005 255);
+
+  /* Amber accent (slightly deeper for light bg contrast) */
+  --c-accent:     oklch(58%   0.165 58);
+  --c-accent-dim: oklch(65%   0.13  58);
+  --c-accent-bg:  oklch(95%   0.032 80);
+
+  /* Text */
+  --c-text-1:     oklch(14%   0.008 255);
+  --c-text-2:     oklch(38%   0.009 255);
+  --c-text-3:     oklch(60%   0.007 255);
+
+  /* Status */
+  --c-run:        oklch(50%   0.19  145);
+  --c-run-bg:     oklch(94%   0.04  145);
+  --c-start:      oklch(58%   0.17  70);
+  --c-err:        oklch(50%   0.22  22);
+  --c-err-bg:     oklch(96%   0.04  22);
+
+  color-scheme: light;
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────── */
