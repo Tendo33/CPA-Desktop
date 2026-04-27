@@ -17,99 +17,7 @@ import {
 import { useCpaStore } from '@/stores/cpa'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-
-/* ── Toggle Switch ─────────────────────────────────────────────────────── */
-function Toggle({
-  checked,
-  onChange,
-  disabled,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      className={`toggle${checked ? ' on' : ''}`}
-      style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-      onClick={() => !disabled && onChange(!checked)}
-      aria-checked={checked}
-      role="switch"
-    >
-      <span className="toggle-thumb" />
-    </button>
-  )
-}
-
-/* ── Section wrapper ───────────────────────────────────────────────────── */
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 2,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--c-accent)',
-          }}
-        >
-          {title}
-        </span>
-        {action}
-      </div>
-      <div style={{ border: '1px solid var(--c-border-sub)', borderRadius: 8, overflow: 'hidden' }}>
-        {children}
-      </div>
-    </section>
-  )
-}
-
-/* ── Setting row ───────────────────────────────────────────────────────── */
-function Row({
-  label,
-  hint,
-  children,
-  first,
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-  first?: boolean
-}) {
-  return (
-    <div
-      className="setting-row"
-      style={{
-        padding: '11px 14px',
-        borderTop: first ? 'none' : '1px solid var(--c-border-sub)',
-        background: 'var(--c-surface)',
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-1)' }}>{label}</span>
-        {hint && <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{hint}</span>}
-      </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
-    </div>
-  )
-}
+import { Button, NumberInput, Row, Section, Toggle } from '@/components/ui'
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
@@ -218,28 +126,11 @@ export function SettingsPage() {
               {portMismatch && (
                 <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>{t.settings.mismatch}</span>
               )}
-              <input
-                type="number"
+              <NumberInput
                 value={settings.port}
                 min={1024}
                 max={65535}
-                onChange={(e) => setSettings({ ...settings, port: Number(e.target.value) })}
-                style={{
-                  width: 72,
-                  height: 26,
-                  background: 'var(--c-raised)',
-                  border: '1px solid var(--c-border)',
-                  borderRadius: 5,
-                  padding: '0 8px',
-                  fontSize: 12,
-                  fontFamily: 'inherit',
-                  color: 'var(--c-text-1)',
-                  textAlign: 'right',
-                  outline: 'none',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--c-accent-dim)')}
-                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--c-border)')}
+                onChange={(n) => setSettings({ ...settings, port: n })}
               />
             </div>
           </Row>
@@ -256,14 +147,7 @@ export function SettingsPage() {
           </Row>
 
           <Row label="Check for app updates" hint={updateMsg || 'Tauri self-updater'}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={onCheckUpdate}
-              style={{ fontSize: 11, padding: '3px 10px' }}
-            >
-              Check now
-            </button>
+            <Button variant="ghost" size="sm" onClick={onCheckUpdate}>Check now</Button>
           </Row>
 
           <Row label="Auto-check on launch" hint="Once every 6 hours">
@@ -275,29 +159,20 @@ export function SettingsPage() {
         </Section>
 
         {/* ── Actions ─────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="btn btn-primary"
-          >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={handleSaveSettings} disabled={saving}>
             {saving ? t.settings.saving : t.settings.saveSettings}
-          </button>
-
-          <button onClick={openDataDir} className="btn btn-ghost">
+          </Button>
+          <Button variant="ghost" onClick={openDataDir}>
             <FolderOpen size={12} strokeWidth={1.75} />
             {t.settings.dataFolder}
-          </button>
-
-          <button onClick={handleRestartCpa} className="btn btn-ghost">
+          </Button>
+          <Button variant="ghost" onClick={handleRestartCpa}>
             <RefreshCw size={12} strokeWidth={1.75} />
             {t.settings.restartCpa}
-          </button>
-
+          </Button>
           {msg && (
-            <span style={{ fontSize: 12, color: 'var(--c-run)', fontWeight: 500 }}>
-              {msg}
-            </span>
+            <span className="text-xs font-medium text-run">{msg}</span>
           )}
         </div>
 
@@ -305,14 +180,9 @@ export function SettingsPage() {
         <Section
           title={t.settings.configYaml}
           action={
-            <button
-              onClick={handleSaveYaml}
-              disabled={saving}
-              className="btn btn-primary"
-              style={{ fontSize: 11, padding: '3px 10px' }}
-            >
+            <Button onClick={handleSaveYaml} disabled={saving} size="sm">
               {t.settings.saveApply}
-            </button>
+            </Button>
           }
         >
           <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
