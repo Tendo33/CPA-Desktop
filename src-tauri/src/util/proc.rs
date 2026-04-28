@@ -133,11 +133,16 @@ pub fn attach_to_job(child: &Child) -> std::io::Result<()> {
         return Err(std::io::Error::last_os_error());
     }
 
-    // We intentionally leak `job` (don't CloseHandle). The kernel keeps
-    // the job alive as long as our process holds the handle; closing it
-    // would immediately KILL_ON_JOB_CLOSE the child, which is the
-    // opposite of what we want. The handle is reclaimed on process exit.
-    std::mem::forget(job);
+    // Important: do NOT close `job`. The kernel keeps the job object
+    // alive as long as some handle references it; closing our handle
+    // would immediately fire KILL_ON_JOB_CLOSE on the child, which is
+    // the opposite of what we want.
+    //
+    // No explicit `mem::forget` is needed because in windows-sys 0.59
+    // `HANDLE` is `*mut c_void` (a Copy type with no Drop impl) — going
+    // out of scope here is already a no-op at the C level. The handle
+    // is reclaimed by the OS on process exit.
+    let _ = job;
     Ok(())
 }
 
