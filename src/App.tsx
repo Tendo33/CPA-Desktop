@@ -14,9 +14,12 @@ import { useSettingsStore } from '@/stores/settings'
 import {
   applyAppUpdate,
   checkAppUpdate,
+  checkCpaRunning,
   cpaBinaryExists,
+  detectInstallSources,
   getInstallSourceInfo,
   getSettings,
+  setInstallSource,
 } from '@/lib/tauri'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
@@ -54,6 +57,16 @@ export default function App() {
     // sources (Homebrew / SystemPath / Custom) we trust the user — even
     // if validation fails, the Settings → Install Source card will guide
     // them; we don't pop the managed-download wizard.
+    //
+    // For a fresh install whose settings still default to `managed` we go
+    // a step further and try to avoid the wizard entirely:
+    //   1. If something is already responding on the configured port
+    //      (typical case: `brew services start cliproxyapi` is running),
+    //      we don't need to download anything — just connect.
+    //   2. If a Homebrew or SystemPath install is auto-detected on disk,
+    //      switch the active source to it and skip the wizard.
+    // Only when none of those hold do we fall back to the managed
+    // download wizard.
     void (async () => {
       try {
         const info = await getInstallSourceInfo()
@@ -61,11 +74,32 @@ export default function App() {
           setBinaryReady(true)
           return
         }
+        const managedExists = await cpaBinaryExists().catch(() => false)
+        if (managedExists) {
+          setBinaryReady(true)
+          return
+        }
+        const alreadyUp = await checkCpaRunning().catch(() => false)
+        if (alreadyUp) {
+          setBinaryReady(true)
+          return
+        }
+        const detected = await detectInstallSources().catch(() => null)
+        const candidate =
+          detected?.homebrew?.source ?? detected?.systemPath?.source ?? null
+        if (candidate) {
+          await setInstallSource(candidate).catch((e) =>
+            console.error('auto-switch install source failed', e),
+          )
+          setBinaryReady(true)
+          return
+        }
+        setBinaryReady(false)
       } catch (err) {
-        console.error('getInstallSourceInfo failed; falling back to legacy probe', err)
+        console.error('install source probe failed; falling back to legacy probe', err)
+        const exists = await cpaBinaryExists().catch(() => false)
+        setBinaryReady(exists)
       }
-      const exists = await cpaBinaryExists().catch(() => false)
-      setBinaryReady(exists)
     })()
   }, [])
 

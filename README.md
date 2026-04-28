@@ -63,9 +63,25 @@ dimensions.
 
 | Platform | Status                  | What you'll see on first launch                              |
 | -------- | ----------------------- | ------------------------------------------------------------ |
-| macOS    | Unsigned (TODO: notarize) | Gatekeeper warning. Run once: `xattr -cr "/Applications/CPA Desktop.app"` |
+| macOS    | Unsigned (TODO: notarize) | Gatekeeper warning. See the macOS notes below.               |
 | Windows  | Unsigned (TODO: code-sign) | SmartScreen prompt → _More info_ → _Run anyway_              |
 | Linux    | N/A                     | No equivalent to Gatekeeper; AppImage / `.deb` work as-is.   |
+
+### macOS: clear the quarantine flag
+
+Because the build is unsigned, macOS marks the downloaded `.dmg` (and the
+`.app` it installs) as quarantined. Either of these one-line fixes works:
+
+```bash
+# Option A — clear quarantine on the .dmg before opening it
+xattr -d com.apple.quarantine ~/Downloads/CPA.Desktop_*_aarch64.dmg
+# (use ..._x64.dmg on Intel Macs)
+
+# Option B — already installed? clear it on the app bundle
+xattr -cr "/Applications/CPA Desktop.app"
+```
+
+After that, double-click the `.dmg` (or launch the app) as usual.
 
 Maintainers: see `docs/SIGNING.md` for the planned signing pipeline and the
 GitHub secrets required to enable it.
