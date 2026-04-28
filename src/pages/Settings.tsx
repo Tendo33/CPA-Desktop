@@ -19,6 +19,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 import { Button, Input, NumberInput, Row, Section, Toggle, Tabs } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
+import { InstallSourceCard } from '@/components/InstallSourceCard'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -138,6 +139,9 @@ export function SettingsPage() {
       style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
     >
       <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
+        {/* ── Install source ─────────────────────────────────────── */}
+        <InstallSourceCard />
+
         {/* ── Application ─────────────────────────────────────────── */}
         <Section title={t.settings.application}>
           <Row

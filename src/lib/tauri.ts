@@ -5,6 +5,49 @@ export interface LastPanic {
   message: string
 }
 
+export type InstallSource =
+  | { kind: 'managed' }
+  | { kind: 'homebrew'; prefix: string }
+  | { kind: 'systemPath'; binary: string; config: string }
+  | { kind: 'custom'; binary: string; config: string; workingDir: string }
+
+export type UpdateStrategy = 'githubRelease' | 'brewUpgrade' | 'externalNotice'
+
+export interface ResolvedPaths {
+  binary: string
+  config: string
+  workingDir: string
+}
+
+export interface InstallSourceInfo {
+  source: InstallSource
+  paths: ResolvedPaths
+  strategy: UpdateStrategy
+  validationErrors: string[]
+}
+
+export interface DetectedInstall {
+  source: InstallSource
+  note: string | null
+}
+
+export interface DetectionReport {
+  managedPresent: boolean
+  homebrew: DetectedInstall | null
+  systemPath: DetectedInstall | null
+}
+
+export interface ExternalUpdateInstructions {
+  heading: string
+  commands: string[]
+  link: string | null
+}
+
+export interface BrewUpgradeResult {
+  success: boolean
+  log: string
+}
+
 export interface AppSettings {
   schemaVersion?: number
   port: number
@@ -13,6 +56,7 @@ export interface AppSettings {
   lastPanic?: LastPanic | null
   autoCheckAppUpdates?: boolean
   mirrors?: string[]
+  installSource?: InstallSource
 }
 
 export interface UpdateCheckResult {
@@ -20,6 +64,7 @@ export interface UpdateCheckResult {
   latestVersion: string
   updateAvailable: boolean
   downloadUrl: string
+  strategy: UpdateStrategy
 }
 
 export interface LogLine {
@@ -68,6 +113,17 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
 export const downloadCpaUpdate = (downloadUrl: string, version: string, mirrors?: string[]) =>
   invoke<void>('download_cpa_update', { downloadUrl, version, mirrors })
+
+// Install source
+export const getInstallSourceInfo = () => invoke<InstallSourceInfo>('get_install_source_info')
+export const detectInstallSources = () => invoke<DetectionReport>('detect_install_sources')
+export const validateInstallSource = (source: InstallSource) =>
+  invoke<string[]>('validate_install_source', { source })
+export const setInstallSource = (source: InstallSource) =>
+  invoke<void>('set_install_source', { source })
+export const upgradeViaBrew = () => invoke<BrewUpgradeResult>('upgrade_via_brew')
+export const externalUpdateInstructions = () =>
+  invoke<ExternalUpdateInstructions>('external_update_instructions')
 
 // App self-update (Tauri updater plugin)
 import { check, type Update } from '@tauri-apps/plugin-updater'

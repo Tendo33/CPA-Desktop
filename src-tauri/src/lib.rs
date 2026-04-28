@@ -2,6 +2,8 @@ pub mod app_config;
 pub mod commands;
 pub mod cpa_lifecycle;
 pub mod cpa_manager;
+pub mod install_detect;
+pub mod install_source;
 pub mod log_stream;
 pub mod panic_log;
 pub mod tray;
@@ -171,6 +173,12 @@ pub fn run() {
             commands::config::write_config_field,
             commands::diag::report_frontend_error,
             commands::diag::open_logs_folder,
+            commands::install::get_install_source_info,
+            commands::install::detect_install_sources,
+            commands::install::validate_install_source,
+            commands::install::set_install_source,
+            commands::install::upgrade_via_brew,
+            commands::install::external_update_instructions,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")

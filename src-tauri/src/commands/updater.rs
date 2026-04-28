@@ -1,5 +1,6 @@
 use crate::app_config;
 use crate::cpa_manager::SharedCpaState;
+use crate::install_source::{InstallSource, UpdateStrategy};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -10,6 +11,9 @@ pub struct UpdateCheckResult {
     pub latest_version: String,
     pub update_available: bool,
     pub download_url: String,
+    /// What the UI should do when the user clicks "Update". Mirrors
+    /// `InstallSource::update_strategy()`.
+    pub strategy: UpdateStrategy,
 }
 
 fn asset_name(version: &str) -> String {
@@ -80,6 +84,7 @@ pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
         latest_version: release.tag_name,
         update_available,
         download_url: asset.browser_download_url.clone(),
+        strategy: settings.install_source.update_strategy(),
     })
 }
 
@@ -194,6 +199,16 @@ pub async fn download_cpa_update(
     version: String,
     mirrors: Option<Vec<String>>,
 ) -> Result<(), String> {
+    // Refuse to overwrite binaries we don't own. The UI shouldn't reach
+    // this codepath for non-managed sources, but defend in depth.
+    let settings = app_config::load_settings(&app);
+    if !matches!(settings.install_source, InstallSource::Managed) {
+        return Err(format!(
+            "current install source ({}) is externally managed; use 'External update instructions' instead",
+            settings.install_source.kind_label()
+        ));
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("CPA-Desktop/0.1")
         .build()

@@ -1,7 +1,9 @@
-# Screenshots
+# Legacy Screenshots Note
 
-Drop the following PNGs here (1280×800):
+README media now lives in `assets/readme/` so images are not hidden by the repo's `docs/` ignore rule.
 
-- `dashboard.png` — main Dashboard with CPA running
-- `logs.png` — Logs page with output
-- `settings.png` — Settings page
+Run this from the repository root to regenerate the current README assets:
+
+```sh
+node scripts/generate-assets.mjs
+```

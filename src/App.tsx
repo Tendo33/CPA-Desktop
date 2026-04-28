@@ -10,7 +10,13 @@ import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
 import { useLogStore } from '@/stores/logs'
 import { useSettingsStore } from '@/stores/settings'
-import { applyAppUpdate, checkAppUpdate, cpaBinaryExists, getSettings } from '@/lib/tauri'
+import {
+  applyAppUpdate,
+  checkAppUpdate,
+  cpaBinaryExists,
+  getInstallSourceInfo,
+  getSettings,
+} from '@/lib/tauri'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
@@ -43,7 +49,23 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    cpaBinaryExists().then(setBinaryReady)
+    // First-run setup is the managed download flow. For external install
+    // sources (Homebrew / SystemPath / Custom) we trust the user — even
+    // if validation fails, the Settings → Install Source card will guide
+    // them; we don't pop the managed-download wizard.
+    void (async () => {
+      try {
+        const info = await getInstallSourceInfo()
+        if (info.source.kind !== 'managed') {
+          setBinaryReady(true)
+          return
+        }
+      } catch (err) {
+        console.error('getInstallSourceInfo failed; falling back to legacy probe', err)
+      }
+      const exists = await cpaBinaryExists().catch(() => false)
+      setBinaryReady(exists)
+    })()
   }, [])
 
   useEffect(() => {

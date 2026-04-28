@@ -28,7 +28,7 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let workdir = app_config::data_dir(&app);
+    let workdir = ensure_working_dir(&app);
     let output = spawn_cpa(&binary, &workdir, &cpa_state).inspect_err(|e| {
         let _ = app.emit("cpa:status", &CpaStatus::Error(e.clone()));
     })?;
@@ -65,6 +65,31 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
         let _ = app2.emit("cpa:status", &CpaStatus::Error(msg));
     });
     Ok(())
+}
+
+/// Resolve the working directory for the CPA child process and make sure
+/// it actually exists before we hand it to `Command::current_dir`.
+///
+/// For Homebrew sources the conventional working dir is
+/// `{prefix}/var/cliproxyapi`, which `brew install` does NOT create. If
+/// we fail to create it (e.g. permissions), we fall back to the parent
+/// of `config.yaml` so spawn doesn't blow up with `ENOENT` on cwd.
+fn ensure_working_dir(app: &AppHandle) -> std::path::PathBuf {
+    let workdir = app_config::data_dir(app);
+    if workdir.is_dir() {
+        return workdir;
+    }
+    if std::fs::create_dir_all(&workdir).is_ok() {
+        return workdir;
+    }
+    log::warn!(
+        "working dir {} unavailable; falling back to config parent",
+        workdir.display()
+    );
+    let cfg = app_config::config_yaml_path(app);
+    cfg.parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
 pub fn stop(app: &AppHandle) {
