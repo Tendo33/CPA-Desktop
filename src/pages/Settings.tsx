@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   getSettings,
   saveSettings,
@@ -19,6 +19,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 import { Button, Input, NumberInput, Row, Section, Toggle, Tabs } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
+import { InstallSourceCard } from '@/components/InstallSourceCard'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -68,15 +69,53 @@ export function SettingsPage() {
     }
   }
 
-  const updateSetting = async (updates: Partial<AppSettings>) => {
-    if (!settings) return
-    const next = { ...settings, ...updates }
-    setSettings(next)
+  // Debounce text/number inputs so we don't atomic_write on every keystroke
+  // (each save triggers an fsync; chained writes would visibly stutter).
+  // Toggles bypass the debounce because they're discrete and the user
+  // expects immediate feedback ("did the toggle take?").
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSave = useRef<AppSettings | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      // Flush a final pending write on unmount so the user doesn't lose
+      // edits by navigating away mid-debounce.
+      if (pendingSave.current) {
+        void saveSettings(pendingSave.current).catch(() => {})
+      }
+    }
+  }, [])
+
+  const flushSave = useCallback(async () => {
+    if (!pendingSave.current) return
+    const snapshot = pendingSave.current
+    pendingSave.current = null
     try {
-      await saveSettings(next)
+      await saveSettings(snapshot)
     } catch (e) {
       flash(String(e))
     }
+  }, [])
+
+  const updateSetting = (updates: Partial<AppSettings>, opts?: { immediate?: boolean }) => {
+    if (!settings) return
+    const next = { ...settings, ...updates }
+    setSettings(next)
+    pendingSave.current = next
+    if (opts?.immediate) {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+      void flushSave()
+      return
+    }
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
+      void flushSave()
+    }, 400)
   }
 
   const handleSaveYaml = async () => {
@@ -138,6 +177,9 @@ export function SettingsPage() {
       style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
     >
       <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
+        {/* ── Install source ─────────────────────────────────────── */}
+        <InstallSourceCard />
+
         {/* ── Application ─────────────────────────────────────────── */}
         <Section title={t.settings.application}>
           <Row
@@ -163,7 +205,7 @@ export function SettingsPage() {
           <Row label={t.settings.autoStartCpa} hint={t.settings.autoStartHint}>
             <Toggle
               checked={settings.autoStart}
-              onChange={(v) => updateSetting({ autoStart: v })}
+              onChange={(v) => updateSetting({ autoStart: v }, { immediate: true })}
             />
           </Row>
 
@@ -171,20 +213,20 @@ export function SettingsPage() {
             <Toggle checked={autolaunch} onChange={handleAutolaunchChange} />
           </Row>
 
-          <Row label="Check for app updates" hint={updateMsg || 'Tauri self-updater'}>
+          <Row label={t.settings.checkAppUpdate} hint={updateMsg || t.settings.checkAppUpdateHint}>
             <Button variant="ghost" size="sm" onClick={onCheckUpdate}>
-              Check now
+              {t.settings.checkNow}
             </Button>
           </Row>
 
-          <Row label="Auto-check on launch" hint="Once every 6 hours">
+          <Row label={t.settings.autoCheck} hint={t.settings.autoCheckHint}>
             <Toggle
               checked={settings.autoCheckAppUpdates ?? false}
-              onChange={(v) => updateSetting({ autoCheckAppUpdates: v })}
+              onChange={(v) => updateSetting({ autoCheckAppUpdates: v }, { immediate: true })}
             />
           </Row>
 
-          <Row label="Download mirrors" hint="Comma-separated host list, tried in order">
+          <Row label={t.settings.mirrors} hint={t.settings.mirrorsHint}>
             <Input
               value={(settings.mirrors ?? []).join(', ')}
               onChange={(e) =>
@@ -196,6 +238,31 @@ export function SettingsPage() {
                 })
               }
               className="w-72"
+            />
+          </Row>
+        </Section>
+
+        {/* ── Advanced (process-management knobs) ─────────────────── */}
+        <Section title={t.settings.advanced}>
+          <Row first label={t.settings.startTimeout} hint={t.settings.startTimeoutHint}>
+            <NumberInput
+              value={settings.startTimeoutSecs ?? 60}
+              min={5}
+              max={600}
+              onChange={(n) => updateSetting({ startTimeoutSecs: n })}
+            />
+          </Row>
+          <Row label={t.settings.autoRestart} hint={t.settings.autoRestartHint}>
+            <Toggle
+              checked={settings.autoRestart ?? true}
+              onChange={(v) => updateSetting({ autoRestart: v }, { immediate: true })}
+            />
+          </Row>
+          <Row label={t.settings.healthPath} hint={t.settings.healthPathHint}>
+            <Input
+              value={settings.healthPath ?? '/health'}
+              onChange={(e) => updateSetting({ healthPath: e.target.value })}
+              className="w-48"
             />
           </Row>
         </Section>

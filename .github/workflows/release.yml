@@ -7,6 +7,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The cross-platform lint/test gate lives in ci.yml and runs on every
+  # PR + push. Tag pushes skip straight to building since CI must
+  # already be green on the commit being tagged. If you ever need to
+  # re-validate at release time, dispatch the CI workflow manually.
+
   # ── Generate real macOS icon.icns on macOS before building ────────────────
   gen-icons:
     runs-on: macos-latest
@@ -62,9 +67,9 @@ jobs:
             name: linux-x64
 
           # Linux ARM64
-          - platform: ubuntu-22.04
+          - platform: ubuntu-22.04-arm
             rust-target: aarch64-unknown-linux-gnu
-            args: '--target aarch64-unknown-linux-gnu'
+            args: ''
             name: linux-arm64
 
     runs-on: ${{ matrix.platform }}
@@ -96,8 +101,8 @@ jobs:
           workspaces: './src-tauri -> target'
           key: ${{ matrix.name }}
 
-      - name: Install Linux x64 system dependencies
-        if: matrix.name == 'linux-x64'
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -105,20 +110,6 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
-
-      - name: Install Linux ARM64 cross-compilation tools
-        if: matrix.name == 'linux-arm64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            libwebkit2gtk-4.1-dev:arm64 \
-            libappindicator3-dev:arm64 \
-            librsvg2-dev:arm64 \
-            patchelf
-          echo "PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Install frontend dependencies
         run: npm install
@@ -136,20 +127,70 @@ jobs:
             const t=fs.readFileSync(p,'utf8').replace(/^version = .*/m, 'version = \"'+v+'\"'); \
             fs.writeFileSync(p,t);"
 
+      - name: Detect macOS signing secrets
+        if: runner.os == 'macOS'
+        id: macos_signing
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [[ -n "$APPLE_CERTIFICATE" && -n "$APPLE_CERTIFICATE_PASSWORD" && -n "$APPLE_SIGNING_IDENTITY" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Tauri app
+        if: runner.os != 'macOS' || steps.macos_signing.outputs.enabled != 'true'
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater signing (required by tauri-plugin-updater)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code signing (optional — set in repo secrets to enable; build stays unsigned otherwise)
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '' }}
+        with:
+          includeUpdaterJson: true
+          tagName: ${{ github.ref_name }}
+          releaseName: 'CPA Desktop ${{ github.ref_name }}'
+          releaseBody: |
+            ## CPA Desktop ${{ github.ref_name }}
+
+            Desktop manager for CLIProxyAPI — auto-download, silent background start,
+            real-time logs, one-click updates. No terminal window required.
+
+            ### Platform Downloads
+
+            | Platform | File |
+            |----------|------|
+            | Windows x64 | `CPA Desktop_*_x64_en-US.msi` or `*_x64-setup.exe` |
+            | Windows ARM64 | `CPA Desktop_*_arm64_en-US.msi` |
+            | macOS Apple Silicon | `CPA Desktop_*_aarch64.dmg` |
+            | macOS Intel | `CPA Desktop_*_x64.dmg` |
+            | Linux x64 | `cpa-desktop_*_amd64.AppImage` or `.deb` |
+            | Linux ARM64 | `cpa-desktop_*_arm64.AppImage` or `.deb` |
+
+            > **Note:** The CLIProxyAPI binary is downloaded automatically on first launch (~14 MB).
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Build Tauri app (signed macOS)
+        if: runner.os == 'macOS' && steps.macos_signing.outputs.enabled == 'true'
+        uses: tauri-apps/tauri-action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing (required by tauri-plugin-updater)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing is enabled only when the required secrets are present.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           includeUpdaterJson: true
           tagName: ${{ github.ref_name }}

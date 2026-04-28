@@ -59,7 +59,7 @@ pub fn write_config_yaml(app: AppHandle, content: String) -> Result<(), String> 
         let _ = std::fs::copy(&path, &backup_path);
         prune_backups(&backups, 10);
     }
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+    app_config::atomic_write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
 fn prune_backups(dir: &std::path::Path, keep: usize) {
@@ -194,12 +194,27 @@ pub fn write_config_yaml_port(app: AppHandle, port: u16) -> Result<(), String> {
         return Err("config.yaml root is not a mapping".into());
     }
     let serialized = serde_yaml::to_string(&value).map_err(|e| e.to_string())?;
-    std::fs::write(&path, serialized).map_err(|e| e.to_string())
+    app_config::atomic_write(&path, serialized.as_bytes()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn open_data_dir(app: AppHandle) -> Result<(), String> {
-    let dir = app_config::data_dir(&app);
+    // Prefer the directory holding config.yaml — that's what users mean
+    // by "data folder", and for external install sources it's distinct
+    // from the working dir.
+    let cfg = app_config::config_yaml_path(&app);
+    let mut dir = cfg
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| app_config::data_dir(&app));
+    // For external sources the conventional config dir may not exist yet
+    // (e.g. SystemPath default `~/.cli-proxy-api/`). Try to create it; if
+    // that fails (read-only / permission), fall back to our always-writable
+    // internal data dir so the user still gets *something* useful opened.
+    if !dir.is_dir() && std::fs::create_dir_all(&dir).is_err() {
+        dir = app_config::internal_data_dir(&app);
+        let _ = std::fs::create_dir_all(&dir);
+    }
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")

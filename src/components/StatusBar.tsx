@@ -1,5 +1,13 @@
+import { useEffect, useState } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { useCpaStore } from '@/stores/cpa'
-import { startCpa, stopCpa } from '@/lib/tauri'
+import {
+  getInstallSourceInfo,
+  startCpa,
+  stopCpa,
+  type AutoRestartEvent,
+  type InstallSourceInfo,
+} from '@/lib/tauri'
 import type { CpaStatus } from '@/lib/tauri'
 import { errorOf, isRunning, isStarting } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
@@ -8,6 +16,31 @@ import { dotClass, statusColor } from '@/components/statusbar.helpers'
 export function StatusBar() {
   const { status, port } = useCpaStore()
   const t = useT()
+  const sourceLabel = (kind: string): string => {
+    const label = (t.installSource.kind as Record<string, string | undefined>)[kind]
+    return (label ?? kind).toUpperCase()
+  }
+  const [info, setInfo] = useState<InstallSourceInfo | null>(null)
+  const [restartHint, setRestartHint] = useState<string | null>(null)
+
+  useEffect(() => {
+    getInstallSourceInfo()
+      .then(setInfo)
+      .catch(() => {})
+    const subs = [
+      listen<InstallSourceInfo>('install:source-changed', (e) => setInfo(e.payload)),
+      listen<AutoRestartEvent>('cpa:auto-restart', (e) => {
+        const { attempt, max, delaySecs, reason } = e.payload
+        setRestartHint(`auto-restart ${attempt}/${max} in ${delaySecs}s — ${reason}`)
+        // Clear after a short while so the bar doesn't get stuck if
+        // the next attempt succeeds silently.
+        setTimeout(() => setRestartHint(null), Math.max(8000, delaySecs * 1000 + 4000))
+      }),
+    ]
+    return () => {
+      subs.forEach((p) => p.then((f) => f()).catch(() => {}))
+    }
+  }, [])
   const running = isRunning(status)
   const starting = isStarting(status)
   const errorMsg = errorOf(status)
@@ -70,6 +103,22 @@ export function StatusBar() {
             — {errorMsg}
           </span>
         )}
+        {restartHint && !errorMsg && (
+          <span
+            title={restartHint}
+            style={{
+              fontSize: 11,
+              color: 'var(--c-accent)',
+              opacity: 0.85,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 280,
+            }}
+          >
+            ↻ {restartHint}
+          </span>
+        )}
       </div>
 
       {/* Port */}
@@ -83,6 +132,24 @@ export function StatusBar() {
       >
         :{port}
       </div>
+
+      {/* Install source badge */}
+      {info && info.source.kind !== 'managed' && (
+        <span
+          title={info.paths.binary}
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            color: 'var(--c-text-3)',
+            border: '1px solid var(--c-border)',
+            borderRadius: 3,
+            padding: '1px 5px',
+          }}
+        >
+          {sourceLabel(info.source.kind)}
+        </span>
+      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />

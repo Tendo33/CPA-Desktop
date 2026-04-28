@@ -2,9 +2,12 @@
 
 A cross-platform desktop app for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) built with **Tauri v2 + Rust + React**.
 
+![CPA Desktop poster](assets/readme/poster.png)
+
 ## What it does
 
 - **Auto-downloads & updates** the CPA binary from GitHub releases — no manual unzipping
+- **Multiple install sources** — works alongside Homebrew, AUR/system packages, or fully custom paths (see below)
 - **Silent background launch** — no black CMD window on Windows
 - **Detects existing CPA** — if CPA is already running, it just connects to it
 - **Real-time log viewer** — stdout/stderr streaming from the CPA process
@@ -12,26 +15,60 @@ A cross-platform desktop app for [CLIProxyAPI](https://github.com/router-for-me/
 - **System tray** — close to tray, double-click to restore
 - **One-click CPA updates** — downloads the new binary and restarts CPA automatically
 
-## Screenshots
+## Install sources
 
-| Dashboard                                    | Logs                               | Settings                                   |
-| -------------------------------------------- | ---------------------------------- | ------------------------------------------ |
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Logs](docs/screenshots/logs.png) | ![Settings](docs/screenshots/settings.png) |
+CPA Desktop can manage CPA itself or hand off to whichever package
+manager already installed it. Switch sources from **Settings → Install
+Source**; auto-detection populates the available choices.
 
-> Dashboard shows CPA's built-in management panel (`/management.html#/quota`).
-> Run `npm run tauri dev` and capture each tab at 1280×800 to refresh the images.
+| Source       | Binary                        | Config                                    | Update via                                  |
+| ------------ | ----------------------------- | ----------------------------------------- | ------------------------------------------- |
+| `Managed`    | `<appData>/bin/cli-proxy-api` | `<appData>/data/config.yaml`              | GitHub releases (handled in app)            |
+| `Homebrew`   | `$(brew --prefix)/bin/...`    | `$(brew --prefix)/etc/cliproxyapi.conf`   | `brew upgrade cliproxyapi` (handled in app) |
+| `SystemPath` | first match on `$PATH`        | `~/.cli-proxy-api/config.yaml` by default | your package manager (instructions only)    |
+| `Custom`     | user-provided                 | user-provided                             | manual (instructions only)                  |
 
-## Unsigned builds
+Notes:
 
-Until v0.2.0 the binaries are unsigned. The first launch will be blocked by Gatekeeper / SmartScreen.
+- Homebrew users running `brew services start cliproxyapi` should
+  `brew services stop` first — CPA Desktop spawns CPA itself and will
+  conflict on the listening port otherwise.
+- AUR / one-shot installer users should run
+  `systemctl --user disable cli-proxy-api` for the same reason.
+- For external sources we never overwrite files we don't own; the
+  "Update" action shows the right command to run in your terminal.
 
-**macOS** — clear the quarantine attribute once after copying to Applications:
+## Product preview
 
-```sh
-xattr -cr "/Applications/CPA Desktop.app"
-```
+These generated previews show CPA Desktop's shell and core workflows. The
+dashboard panel is illustrative; the live CPA management webview is loaded from
+CPA at runtime.
 
-**Windows** — on the SmartScreen prompt, click _More info_ → _Run anyway_.
+### Dashboard preview
+
+![Dashboard preview](assets/readme/dashboard.png)
+
+### Logs preview
+
+![Logs preview](assets/readme/logs.png)
+
+### Settings preview
+
+![Settings preview](assets/readme/settings.png)
+
+Run `node scripts/generate-assets.mjs` to refresh preview images at their exact
+dimensions.
+
+## Code signing status
+
+| Platform | Status                  | What you'll see on first launch                              |
+| -------- | ----------------------- | ------------------------------------------------------------ |
+| macOS    | Unsigned (TODO: notarize) | Gatekeeper warning. Run once: `xattr -cr "/Applications/CPA Desktop.app"` |
+| Windows  | Unsigned (TODO: code-sign) | SmartScreen prompt → _More info_ → _Run anyway_              |
+| Linux    | N/A                     | No equivalent to Gatekeeper; AppImage / `.deb` work as-is.   |
+
+Maintainers: see `docs/SIGNING.md` for the planned signing pipeline and the
+GitHub secrets required to enable it.
 
 ## Platforms
 
@@ -68,8 +105,8 @@ Produces platform-native installers in `src-tauri/target/release/bundle/`.
 
 ## How it works
 
-1. On first launch, CPA Desktop downloads the CPA binary from GitHub releases into your app data folder
-2. It starts CPA as a hidden subprocess (no console window on Windows)
+1. On first launch (Managed source), CPA Desktop downloads the CPA binary from GitHub releases into your app data folder
+2. It starts CPA as a hidden subprocess (no console window on Windows) using the resolved install-source paths
 3. The management panel (`/management.html#/quota`) loads in a native webview
 4. CPA's static panel files are auto-managed by CPA itself
 5. On close, the app minimizes to the system tray

@@ -2,10 +2,15 @@ import { useEffect, useState } from 'react'
 import {
   checkCpaUpdate,
   downloadCpaUpdate,
+  externalUpdateInstructions,
+  getInstallSourceInfo,
   getSettings,
   openLogsFolder,
   stopCpa,
   startCpa,
+  upgradeViaBrew,
+  type ExternalUpdateInstructions,
+  type InstallSource,
   type LastPanic,
   type UpdateCheckResult,
 } from '@/lib/tauri'
@@ -14,7 +19,7 @@ import { listen } from '@tauri-apps/api/event'
 import { getVersion } from '@tauri-apps/api/app'
 import { ArrowUpRight } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-import { Button } from '@/components/ui'
+import { Button, Modal } from '@/components/ui'
 
 export function AboutPage() {
   const { status } = useCpaStore()
@@ -27,6 +32,11 @@ export function AboutPage() {
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const [lastPanic, setLastPanic] = useState<LastPanic | null>(null)
+  const [brewLog, setBrewLog] = useState('')
+  const [brewOpen, setBrewOpen] = useState(false)
+  const [externalOpen, setExternalOpen] = useState(false)
+  const [external, setExternal] = useState<ExternalUpdateInstructions | null>(null)
+  const [sourceKind, setSourceKind] = useState<InstallSource['kind']>('managed')
 
   useEffect(() => {
     getVersion()
@@ -34,6 +44,9 @@ export function AboutPage() {
       .catch(() => setAppVersion('0.1.0'))
     getSettings()
       .then((s) => setLastPanic(s.lastPanic ?? null))
+      .catch(() => {})
+    getInstallSourceInfo()
+      .then((i) => setSourceKind(i.source.kind))
       .catch(() => {})
 
     const unsubs = [
@@ -43,6 +56,9 @@ export function AboutPage() {
         setDownloading(false)
         setProgress(null)
         setTimeout(() => startCpa(), 300)
+      }),
+      listen<string>('install:brew-line', (e) => {
+        setBrewLog((prev) => prev + e.payload + '\n')
       }),
     ]
     return () => {
@@ -64,17 +80,53 @@ export function AboutPage() {
 
   const handleUpdate = async () => {
     if (!update) return
+    setError('')
+
+    if (update.strategy === 'brewUpgrade') {
+      setBrewLog('')
+      setBrewOpen(true)
+      try {
+        await upgradeViaBrew()
+        setBrewLog((prev) => prev + '\n[done]')
+        setTimeout(() => startCpa(), 500)
+      } catch (e) {
+        setBrewLog((prev) => prev + `\n[error] ${e}`)
+      }
+      return
+    }
+
+    if (update.strategy === 'externalNotice') {
+      try {
+        setExternal(await externalUpdateInstructions())
+        setExternalOpen(true)
+      } catch (e) {
+        setError(String(e))
+      }
+      return
+    }
+
     setDownloading(true)
     setDone(false)
-    setError('')
     try {
       if (status.kind === 'Running') await stopCpa()
       const mirrors = (await getSettings().catch(() => null))?.mirrors
-      await downloadCpaUpdate(update.downloadUrl, update.latestVersion, mirrors)
+      await downloadCpaUpdate(
+        update.downloadUrl,
+        update.latestVersion,
+        mirrors,
+        update.expectedSha256 ?? null,
+      )
     } catch (e) {
       setError(String(e))
       setDownloading(false)
     }
+  }
+
+  const updateButtonLabel = () => {
+    if (!update) return ''
+    if (update.strategy === 'brewUpgrade') return t.installSource.brewUpgrade
+    if (update.strategy === 'externalNotice') return t.installSource.showInstructions
+    return downloading ? t.about.downloading(pct) : t.about.updateTo(update.latestVersion)
   }
 
   const pct = progress ? Math.round((progress[0] / Math.max(progress[1], 1)) * 100) : 0
@@ -278,11 +330,65 @@ export function AboutPage() {
 
             {update?.updateAvailable && !done && (
               <Button onClick={handleUpdate} disabled={downloading}>
-                {downloading ? t.about.downloading(pct) : t.about.updateTo(update.latestVersion)}
+                {updateButtonLabel()}
               </Button>
             )}
           </div>
         </div>
+
+        <Modal
+          open={brewOpen}
+          onClose={() => setBrewOpen(false)}
+          title="brew upgrade cliproxyapi"
+        >
+          <pre
+            className="max-h-[320px] min-h-[120px] overflow-auto rounded bg-raised p-2 text-[11px] text-text-2 whitespace-pre-wrap break-all"
+            style={{ fontFamily: 'ui-monospace, monospace' }}
+          >
+            {brewLog || '…'}
+          </pre>
+          <div className="mt-3 flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setBrewOpen(false)}>
+              {t.installSource.close}
+            </Button>
+          </div>
+        </Modal>
+
+        <Modal
+          open={externalOpen}
+          onClose={() => setExternalOpen(false)}
+          title={t.installSource.externalHeading[sourceKind]}
+        >
+          <pre
+            className="rounded bg-raised p-2 text-[11px] text-text-2 whitespace-pre"
+            style={{ fontFamily: 'ui-monospace, monospace' }}
+          >
+            {(external?.commands ?? []).join('\n')}
+          </pre>
+          <div className="mt-3 flex justify-between items-center">
+            {external?.link && (
+              <a
+                href={external.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-accent hover:underline"
+              >
+                {t.installSource.docs}
+              </a>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                navigator.clipboard
+                  .writeText((external?.commands ?? []).join('\n'))
+                  .catch(() => {})
+              }
+            >
+              {t.installSource.copy}
+            </Button>
+          </div>
+        </Modal>
 
         {/* ── Links ─────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
