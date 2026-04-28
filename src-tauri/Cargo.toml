@@ -49,7 +49,15 @@ regex = "1"
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_JobObjects", "Win32_Foundation"] }
+# windows-sys 0.59 splits transitive dependencies (SECURITY_ATTRIBUTES,
+# IO_COUNTERS) across separate features, so JobObjects alone won't pull
+# in CreateJobObjectW or JOBOBJECT_EXTENDED_LIMIT_INFORMATION.
+windows-sys = { version = "0.59", features = [
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Foundation",
+] }
 
 [profile.release]
 panic = "abort"
