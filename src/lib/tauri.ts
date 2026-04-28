@@ -163,3 +163,47 @@ export async function applyAppUpdate(update: Update): Promise<void> {
 export const reportFrontendError = (message: string, stack?: string) =>
   invoke<void>('report_frontend_error', { message, stack })
 export const openLogsFolder = () => invoke<void>('open_logs_folder')
+
+// Auth-file batch export
+export interface AuthFileInfo {
+  id: string
+  sourceName: string
+  fileName: string
+  name: string
+  type: string
+  status: string
+  account: string
+  email: string
+  label: string
+  size: number
+  modtime: string
+  modtimeMs: number
+  planType: string
+}
+
+export interface ExportFailure {
+  sourceName: string
+  reason: string
+}
+
+export interface ExportResult {
+  saved: boolean
+  savedPath: string | null
+  writtenArchive: string | null
+  successCount: number
+  failureCount: number
+  failures: ExportFailure[]
+  sub2apiSuccess: number
+  sub2apiFailures: ExportFailure[]
+}
+
+export const listAuthFiles = (adminPassword: string) =>
+  invoke<AuthFileInfo[]>('list_auth_files', { adminPassword })
+
+export const exportAuthFiles = (args: {
+  adminPassword: string
+  names: string[]
+  exportCpa: boolean
+  exportSub2api: boolean
+  concurrency?: number
+}) => invoke<ExportResult>('export_auth_files', { args })

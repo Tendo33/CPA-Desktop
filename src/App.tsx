@@ -5,6 +5,7 @@ import { FirstRunSetup } from '@/components/FirstRunSetup'
 import { Toaster } from '@/components/ui'
 import { Dashboard } from '@/pages/Dashboard'
 import { Logs } from '@/pages/Logs'
+import { AuthFilesPage } from '@/pages/AuthFiles'
 import { SettingsPage } from '@/pages/Settings'
 import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
@@ -224,6 +225,7 @@ export default function App() {
             >
               {page === 'dashboard' && <Dashboard />}
               {page === 'logs' && <Logs />}
+              {page === 'authFiles' && <AuthFilesPage />}
               {page === 'settings' && <SettingsPage />}
               {page === 'about' && <AboutPage />}
             </motion.main>

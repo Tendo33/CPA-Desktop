@@ -38,6 +38,7 @@
     "window-state:default",
     "global-shortcut:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "dialog:allow-save"
   ]
 }

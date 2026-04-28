@@ -1,9 +1,18 @@
-import { LayoutDashboard, ScrollText, Settings, Info, Sun, Moon, Laptop } from 'lucide-react'
+import {
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  Info,
+  Sun,
+  Moon,
+  Laptop,
+  KeyRound,
+} from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings'
 import { useT } from '@/lib/i18n'
 import { useRef } from 'react'
 
-export type Page = 'dashboard' | 'logs' | 'settings' | 'about'
+export type Page = 'dashboard' | 'logs' | 'authFiles' | 'settings' | 'about'
 
 interface Props {
   current: Page
@@ -18,6 +27,7 @@ export function Sidebar({ current, onChange }: Props) {
   const NAV: { id: Page; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { id: 'logs', label: t.nav.logs, icon: ScrollText },
+    { id: 'authFiles', label: t.nav.authFiles, icon: KeyRound },
     { id: 'settings', label: t.nav.settings, icon: Settings },
     { id: 'about', label: t.nav.about, icon: Info },
   ]

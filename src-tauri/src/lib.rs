@@ -231,6 +231,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -308,6 +309,8 @@ pub fn run() {
             commands::install::set_install_source,
             commands::install::upgrade_via_brew,
             commands::install::external_update_instructions,
+            commands::auth_files::list_auth_files,
+            commands::auth_files::export_auth_files,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")
