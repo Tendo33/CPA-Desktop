@@ -4,9 +4,27 @@ A cross-platform desktop app for [CLIProxyAPI](https://github.com/router-for-me/
 
 ![CPA Desktop poster](assets/readme/poster.png)
 
+## Download
+
+Grab the latest installer for your OS from the
+[**Releases page**](https://github.com/Tendo33/CPA-Desktop/releases/latest).
+Once installed, the app updates itself in place — see
+[How it works](#how-it-works).
+
+| Platform            | Recommended installer                       |
+| ------------------- | ------------------------------------------- |
+| Windows x64 / ARM64 | `*-setup.exe` (NSIS, supports auto-update)  |
+| macOS Apple Silicon | `*_aarch64.dmg`                             |
+| macOS Intel         | `*_x64.dmg`                                 |
+| Linux x64 / ARM64   | `*.AppImage` or `*.deb`                     |
+
+> Windows MSI bundles are also published if you need them for managed
+> deployments, but the NSIS `.exe` is the default download.
+
 ## What it does
 
-- **Auto-downloads & updates** the CPA binary from GitHub releases — no manual unzipping
+- **In-app self-update** — CPA Desktop ships its own auto-updater (Tauri updater plugin) and pulls new releases from GitHub
+- **Auto-downloads & updates the CPA binary** from GitHub releases — no manual unzipping
 - **Multiple install sources** — works alongside Homebrew, AUR/system packages, or fully custom paths (see below)
 - **Silent background launch** — no black CMD window on Windows
 - **Detects existing CPA** — if CPA is already running, it just connects to it
@@ -90,11 +108,12 @@ GitHub secrets required to enable it.
 
 | Platform            | Installer            |
 | ------------------- | -------------------- |
-| Windows x64         | `.msi` / `.exe`      |
-| Windows ARM64       | `.msi` / `.exe`      |
+| Windows x64         | `.exe` / `.msi`      |
+| Windows ARM64       | `.exe` / `.msi`      |
 | macOS Apple Silicon | `.dmg`               |
 | macOS Intel         | `.dmg`               |
 | Linux x64           | `.AppImage` / `.deb` |
+| Linux ARM64         | `.AppImage` / `.deb` |
 
 ## Development
 

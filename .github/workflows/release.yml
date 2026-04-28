@@ -218,18 +218,19 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-  # ── Rename Windows MSI assets to drop the locale suffix ─────────────────
+  # ── Tidy Windows MSI assets ─────────────────────────────────────────────
   # tauri-action's WiX bundler always emits `*_<arch>_en-US.msi` because
   # MSI packages are localized; we don't ship multiple locales so the
-  # `_en-US` suffix is just noise. Rename via the Releases API in place
-  # (no re-upload needed) once all build jobs have published their assets.
+  # `_en-US` suffix is just noise. We also drop the `*.msi.zip` /
+  # `*.msi.zip.sig` updater pairs since the Windows updater channel uses
+  # the NSIS `.exe` artifacts, not the MSI bundles.
   rename-msi-assets:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Strip _en-US from MSI filenames
+      - name: Rename .msi (strip _en-US) and delete .msi.zip / .sig
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -241,11 +242,15 @@ jobs:
             --jq '.assets[] | [.id, .name] | @tsv' > assets.tsv
           while IFS=$'\t' read -r id name; do
             case "$name" in
-              *_en-US.msi|*_en-US.msi.zip|*_en-US.msi.zip.sig)
+              *_en-US.msi)
                 new_name="${name/_en-US/}"
                 echo "Renaming $name -> $new_name"
                 gh api -X PATCH "repos/$REPO/releases/assets/$id" \
                   -f "name=$new_name" >/dev/null
+                ;;
+              *.msi.zip|*.msi.zip.sig)
+                echo "Deleting $name"
+                gh api -X DELETE "repos/$REPO/releases/assets/$id" >/dev/null
                 ;;
             esac
           done < assets.tsv
