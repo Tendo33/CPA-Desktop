@@ -5,6 +5,7 @@ import {
   getInstallSourceInfo,
   startCpa,
   stopCpa,
+  type AutoRestartEvent,
   type InstallSourceInfo,
 } from '@/lib/tauri'
 import type { CpaStatus } from '@/lib/tauri'
@@ -20,14 +21,24 @@ export function StatusBar() {
     return (label ?? kind).toUpperCase()
   }
   const [info, setInfo] = useState<InstallSourceInfo | null>(null)
+  const [restartHint, setRestartHint] = useState<string | null>(null)
 
   useEffect(() => {
     getInstallSourceInfo()
       .then(setInfo)
       .catch(() => {})
-    const p = listen<InstallSourceInfo>('install:source-changed', (e) => setInfo(e.payload))
+    const subs = [
+      listen<InstallSourceInfo>('install:source-changed', (e) => setInfo(e.payload)),
+      listen<AutoRestartEvent>('cpa:auto-restart', (e) => {
+        const { attempt, max, delaySecs, reason } = e.payload
+        setRestartHint(`auto-restart ${attempt}/${max} in ${delaySecs}s — ${reason}`)
+        // Clear after a short while so the bar doesn't get stuck if
+        // the next attempt succeeds silently.
+        setTimeout(() => setRestartHint(null), Math.max(8000, delaySecs * 1000 + 4000))
+      }),
+    ]
     return () => {
-      p.then((f) => f()).catch(() => {})
+      subs.forEach((p) => p.then((f) => f()).catch(() => {}))
     }
   }, [])
   const running = isRunning(status)
@@ -90,6 +101,22 @@ export function StatusBar() {
             title={errorMsg}
           >
             — {errorMsg}
+          </span>
+        )}
+        {restartHint && !errorMsg && (
+          <span
+            title={restartHint}
+            style={{
+              fontSize: 11,
+              color: 'var(--c-accent)',
+              opacity: 0.85,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 280,
+            }}
+          >
+            ↻ {restartHint}
           </span>
         )}
       </div>

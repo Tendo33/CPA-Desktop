@@ -22,8 +22,7 @@ pub fn get_install_source_info(app: AppHandle) -> InstallSourceInfo {
     let settings = app_config::load_settings(&app);
     let paths = app_config::resolve_paths(&app);
     let strategy = settings.install_source.update_strategy();
-    let validation_errors =
-        install_detect::validate(&settings.install_source, &paths.binary);
+    let validation_errors = install_detect::validate(&settings.install_source, &paths.binary);
     InstallSourceInfo {
         source: settings.install_source,
         paths,
@@ -158,10 +157,7 @@ pub async fn upgrade_via_brew(app: AppHandle) -> Result<BrewUpgradeResult, Strin
 
     let log = result?;
     let _ = app.emit("install:brew-complete", ());
-    Ok(BrewUpgradeResult {
-        success: true,
-        log,
-    })
+    Ok(BrewUpgradeResult { success: true, log })
 }
 
 fn run_streaming(
@@ -183,9 +179,7 @@ fn run_streaming(
     accumulator.push_str(&header);
     emit(header.trim_end());
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("spawn {program}: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("spawn {program}: {e}"))?;
 
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;

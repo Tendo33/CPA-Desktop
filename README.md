@@ -59,17 +59,16 @@ CPA at runtime.
 Run `node scripts/generate-assets.mjs` to refresh preview images at their exact
 dimensions.
 
-## Unsigned builds
+## Code signing status
 
-Until v0.2.0 the binaries are unsigned. The first launch will be blocked by Gatekeeper / SmartScreen.
+| Platform | Status                  | What you'll see on first launch                              |
+| -------- | ----------------------- | ------------------------------------------------------------ |
+| macOS    | Unsigned (TODO: notarize) | Gatekeeper warning. Run once: `xattr -cr "/Applications/CPA Desktop.app"` |
+| Windows  | Unsigned (TODO: code-sign) | SmartScreen prompt → _More info_ → _Run anyway_              |
+| Linux    | N/A                     | No equivalent to Gatekeeper; AppImage / `.deb` work as-is.   |
 
-**macOS** — clear the quarantine attribute once after copying to Applications:
-
-```sh
-xattr -cr "/Applications/CPA Desktop.app"
-```
-
-**Windows** — on the SmartScreen prompt, click _More info_ → _Run anyway_.
+Maintainers: see `docs/SIGNING.md` for the planned signing pipeline and the
+GitHub secrets required to enable it.
 
 ## Platforms
 

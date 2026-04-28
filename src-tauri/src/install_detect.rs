@@ -45,9 +45,7 @@ fn run_capturing(program: &str, args: &[&str], timeout: Duration) -> Result<Stri
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("spawn {program}: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("spawn {program}: {e}"))?;
 
     // Poll-based timeout. Cheap and dependency-free.
     let start = std::time::Instant::now();
@@ -60,10 +58,7 @@ fn run_capturing(program: &str, args: &[&str], timeout: Duration) -> Result<Stri
                     let _ = s.read_to_string(&mut out);
                 }
                 if !status.success() {
-                    return Err(format!(
-                        "{program} exited with {:?}",
-                        status.code()
-                    ));
+                    return Err(format!("{program} exited with {:?}", status.code()));
                 }
                 return Ok(out.trim().to_string());
             }
@@ -203,10 +198,7 @@ pub fn validate(source: &InstallSource, managed_binary: &Path) -> Vec<String> {
     };
 
     if !resolved.binary.is_file() {
-        errs.push(format!(
-            "binary not found: {}",
-            resolved.binary.display()
-        ));
+        errs.push(format!("binary not found: {}", resolved.binary.display()));
     } else {
         #[cfg(unix)]
         {
@@ -277,7 +269,9 @@ mod tests {
         let errs = validate(&s, Path::new("/whatever"));
         assert!(errs.iter().any(|e| e.contains("binary not found")));
         assert!(errs.iter().any(|e| e.contains("config.yaml not found")));
-        assert!(errs.iter().any(|e| e.contains("working dir is not a directory")));
+        assert!(errs
+            .iter()
+            .any(|e| e.contains("working dir is not a directory")));
     }
 
     #[test]
@@ -321,9 +315,7 @@ mod tests {
             config: cfg,
         };
         let errs = validate(&s, Path::new("/whatever"));
-        assert!(errs
-            .iter()
-            .any(|e| e.contains("no numeric `port`")));
+        assert!(errs.iter().any(|e| e.contains("no numeric `port`")));
     }
 
     #[test]

@@ -57,6 +57,9 @@ export interface AppSettings {
   autoCheckAppUpdates?: boolean
   mirrors?: string[]
   installSource?: InstallSource
+  startTimeoutSecs?: number
+  autoRestart?: boolean
+  healthPath?: string
 }
 
 export interface UpdateCheckResult {
@@ -64,7 +67,15 @@ export interface UpdateCheckResult {
   latestVersion: string
   updateAvailable: boolean
   downloadUrl: string
+  expectedSha256: string | null
   strategy: UpdateStrategy
+}
+
+export interface AutoRestartEvent {
+  attempt: number
+  max: number
+  delaySecs: number
+  reason: string
 }
 
 export interface LogLine {
@@ -111,8 +122,18 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 
 // Updater
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
-export const downloadCpaUpdate = (downloadUrl: string, version: string, mirrors?: string[]) =>
-  invoke<void>('download_cpa_update', { downloadUrl, version, mirrors })
+export const downloadCpaUpdate = (
+  downloadUrl: string,
+  version: string,
+  mirrors?: string[],
+  expectedSha256?: string | null,
+) =>
+  invoke<void>('download_cpa_update', {
+    downloadUrl,
+    version,
+    mirrors,
+    expectedSha256: expectedSha256 ?? null,
+  })
 
 // Install source
 export const getInstallSourceInfo = () => invoke<InstallSourceInfo>('get_install_source_info')

@@ -19,11 +19,21 @@ fn spawn_and_kill_mock_cpa() {
     let workdir = std::env::temp_dir();
     let path = fixture();
 
-    let _output = spawn_cpa(&path, &workdir, &state).expect("spawn");
+    let (_output, epoch) = spawn_cpa(&path, &workdir, &state).expect("spawn");
+    assert_eq!(epoch, 1, "first spawn should be epoch 1");
     {
         let s = state.lock().unwrap();
         assert!(matches!(s.status, CpaStatus::Starting | CpaStatus::Running));
+        assert!(!s.starting, "starting flag should be released after spawn");
     }
+
+    // Second concurrent spawn must be rejected — no race window.
+    let again = spawn_cpa(&path, &workdir, &state);
+    assert!(
+        again.is_err(),
+        "second spawn should be rejected (got Ok): {:?}",
+        again.err()
+    );
 
     std::thread::sleep(Duration::from_millis(150));
     assert!(check_process_alive(&state), "mock should still be alive");

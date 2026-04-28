@@ -8,12 +8,13 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InstallSource {
     /// Managed by CPA Desktop: we download, replace, and run the binary
     /// out of the app data directory. This is the original behaviour and
     /// remains the default.
+    #[default]
     Managed,
 
     /// Installed via Homebrew. `prefix` is the brew prefix
@@ -31,12 +32,6 @@ pub enum InstallSource {
         config: PathBuf,
         working_dir: PathBuf,
     },
-}
-
-impl Default for InstallSource {
-    fn default() -> Self {
-        InstallSource::Managed
-    }
 }
 
 /// What kind of "update" makes sense for an install source.
@@ -101,15 +96,12 @@ impl InstallSource {
                 }
             }
             InstallSource::SystemPath { binary, config } => {
-                let working_dir = config
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| {
-                        binary
-                            .parent()
-                            .map(|p| p.to_path_buf())
-                            .unwrap_or_else(|| PathBuf::from("."))
-                    });
+                let working_dir = config.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+                    binary
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| PathBuf::from("."))
+                });
                 ResolvedPaths {
                     binary: binary.clone(),
                     config: config.clone(),
@@ -197,10 +189,7 @@ mod tests {
         };
         let r = s.resolve(&ctx());
         assert_eq!(r.binary, PathBuf::from("/usr/bin/cli-proxy-api"));
-        assert_eq!(
-            r.working_dir,
-            PathBuf::from("/home/u/.cli-proxy-api")
-        );
+        assert_eq!(r.working_dir, PathBuf::from("/home/u/.cli-proxy-api"));
     }
 
     #[test]

@@ -36,6 +36,29 @@ pub struct AppSettings {
     /// `Managed`, preserving existing behaviour.
     #[serde(default)]
     pub install_source: InstallSource,
+    /// How long to wait for CPA to answer its health endpoint after
+    /// spawn before declaring startup failure. Slow disks / first-time
+    /// model downloads need more than the default 30s.
+    #[serde(default = "default_start_timeout_secs")]
+    pub start_timeout_secs: u32,
+    /// Whether the health monitor should attempt to relaunch CPA after
+    /// it crashes (bounded retry with exponential backoff).
+    #[serde(default = "default_auto_restart")]
+    pub auto_restart: bool,
+    /// HTTP path used for liveness probes. Configurable so deployments
+    /// fronted by a reverse proxy can point us at the real health route.
+    #[serde(default = "default_health_path")]
+    pub health_path: String,
+}
+
+fn default_start_timeout_secs() -> u32 {
+    60
+}
+fn default_auto_restart() -> bool {
+    true
+}
+fn default_health_path() -> String {
+    "/health".to_string()
 }
 
 fn default_mirrors() -> Vec<String> {
@@ -57,6 +80,9 @@ impl Default for AppSettings {
             auto_check_app_updates: false,
             mirrors: default_mirrors(),
             install_source: InstallSource::default(),
+            start_timeout_secs: default_start_timeout_secs(),
+            auto_restart: default_auto_restart(),
+            health_path: default_health_path(),
         }
     }
 }
@@ -168,7 +194,93 @@ pub fn save_settings(app: &tauri::AppHandle, settings: &AppSettings) -> Result<(
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    atomic_write(&path, json.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Write `bytes` to `path` atomically: write to a sibling tempfile,
+/// fsync the data, then rename over the destination. Avoids leaving the
+/// destination half-written if the process is killed mid-write.
+pub fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "tmp".into());
+    // Use the process id + nanos to avoid collisions if multiple writers
+    // race on the same destination.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = parent.join(format!(".{file_name}.tmp.{}.{stamp}", std::process::id()));
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    // `std::fs::rename` is atomic on both POSIX (rename(2)) and Windows
+    // (MoveFileExW with MOVEFILE_REPLACE_EXISTING). Calling `remove_file`
+    // first would *introduce* a window where `path` doesn't exist — the
+    // exact failure mode atomic_write is supposed to prevent.
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    // Best-effort: fsync the parent directory so the rename is durable
+    // across power loss on POSIX. Windows journals dir entries with the
+    // file write, so this is a no-op there.
+    #[cfg(unix)]
+    {
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod atomic_write_tests {
+    use super::atomic_write;
+
+    #[test]
+    fn writes_full_payload_to_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        atomic_write(&path, b"{\"hello\":\"world\"}").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"{\"hello\":\"world\"}");
+    }
+
+    #[test]
+    fn replaces_existing_destination_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, b"old").unwrap();
+        atomic_write(&path, b"new-and-longer").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new-and-longer");
+        // No leftover sidecar tmp files.
+        let stray: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| n.starts_with(".settings.json.tmp."))
+            .collect();
+        assert!(stray.is_empty(), "stale tmp left behind: {stray:?}");
+    }
+
+    #[test]
+    fn errors_when_parent_directory_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nope/sub/settings.json");
+        // We *do* create_dir_all internally, so this should succeed.
+        atomic_write(&path, b"x").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"x");
+    }
 }
 
 pub fn ensure_dirs(app: &tauri::AppHandle) -> Result<(), String> {

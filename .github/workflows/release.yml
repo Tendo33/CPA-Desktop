@@ -7,6 +7,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The cross-platform lint/test gate lives in ci.yml and runs on every
+  # PR + push. Tag pushes skip straight to building since CI must
+  # already be green on the commit being tagged. If you ever need to
+  # re-validate at release time, dispatch the CI workflow manually.
+
   # ── Generate real macOS icon.icns on macOS before building ────────────────
   gen-icons:
     runs-on: macos-latest

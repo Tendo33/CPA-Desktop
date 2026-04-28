@@ -45,16 +45,28 @@ export function FirstRunSetup({ onComplete }: Props) {
     if (!update) return
     setDownloading(true)
     setError('')
+    setProgress(0)
     try {
       await downloadCpaUpdate(
         update.downloadUrl,
         update.latestVersion,
         mirrors.length ? mirrors : undefined,
+        update.expectedSha256 ?? null,
       )
     } catch (e) {
       setError(String(e))
       setDownloading(false)
     }
+  }
+
+  const handleRetryCheck = () => {
+    setError('')
+    setChecking(true)
+    setUpdate(null)
+    checkCpaUpdate()
+      .then(setUpdate)
+      .catch((e) => setError(String(e)))
+      .finally(() => setChecking(false))
   }
 
   return (
@@ -244,16 +256,30 @@ export function FirstRunSetup({ onComplete }: Props) {
               color: 'var(--c-err)',
               width: '100%',
               textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              alignItems: 'center',
             }}
           >
-            {error}
+            <span>{error}</span>
+            <Button size="sm" variant="ghost" onClick={handleRetryCheck}>
+              Retry
+            </Button>
           </div>
         )}
 
         {!checking && !update && !error && (
-          <p style={{ fontSize: 12, color: 'var(--c-text-3)', textAlign: 'center' }}>
-            {t.firstRun.noInternet}
-          </p>
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}
+          >
+            <p style={{ fontSize: 12, color: 'var(--c-text-3)', textAlign: 'center' }}>
+              {t.firstRun.noInternet}
+            </p>
+            <Button size="sm" variant="ghost" onClick={handleRetryCheck}>
+              Retry
+            </Button>
+          </div>
         )}
       </div>
     </div>

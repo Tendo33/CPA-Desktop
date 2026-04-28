@@ -11,9 +11,43 @@ pub struct UpdateCheckResult {
     pub latest_version: String,
     pub update_available: bool,
     pub download_url: String,
+    /// SHA256 of the asset, lowercase hex. Optional because legacy
+    /// releases didn't ship checksum files; when absent we fall back to
+    /// "best effort" download with no integrity verification.
+    pub expected_sha256: Option<String>,
     /// What the UI should do when the user clicks "Update". Mirrors
     /// `InstallSource::update_strategy()`.
     pub strategy: UpdateStrategy,
+}
+
+/// Build a long-timeout client for binary downloads. Distinct from the
+/// 2-second `crate::http_client` used for liveness probes — a 14 MB
+/// binary over `gh-proxy.com` from a slow connection can easily take a
+/// few minutes, but we still want a generous *connect* timeout so a
+/// dead mirror gets retried promptly.
+fn download_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .user_agent(format!("CPA-Desktop/{}", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15 * 60))
+        .build()
+        .expect("download client")
+}
+
+/// Compare two version strings with semver semantics, falling back to
+/// string inequality when either side isn't parseable. The leading `v`
+/// is stripped before parsing.
+fn newer_than(latest: &str, current: Option<&str>) -> bool {
+    let cur = match current {
+        Some(c) => c,
+        None => return true,
+    };
+    let lhs = latest.trim_start_matches('v');
+    let rhs = cur.trim_start_matches('v');
+    match (semver::Version::parse(lhs), semver::Version::parse(rhs)) {
+        (Ok(a), Ok(b)) => a > b,
+        _ => latest != cur,
+    }
 }
 
 fn asset_name(version: &str) -> String {
@@ -52,10 +86,7 @@ struct GhAsset {
 pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
     let settings = app_config::load_settings(&app);
 
-    let client = reqwest::Client::builder()
-        .user_agent("CPA-Desktop/0.1")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = download_client();
 
     let release: GhRelease = client
         .get("https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest")
@@ -73,19 +104,83 @@ pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
         .find(|a| a.name == name)
         .ok_or_else(|| format!("No asset found for: {name}"))?;
 
+    // Look for a matching `*.sha256` asset OR a `checksums.txt` listing.
+    let expected_sha256 = find_expected_sha256(&client, &release, &name).await;
+
     let current = settings.cpa_version.clone();
-    let update_available = current
-        .as_deref()
-        .map(|v| v != release.tag_name)
-        .unwrap_or(true);
+    let update_available = newer_than(&release.tag_name, current.as_deref());
 
     Ok(UpdateCheckResult {
         current_version: current,
         latest_version: release.tag_name,
         update_available,
         download_url: asset.browser_download_url.clone(),
+        expected_sha256,
         strategy: settings.install_source.update_strategy(),
     })
+}
+
+/// Probe the release for a checksum we can validate the download
+/// against. Tries `<asset>.sha256` first, then a sibling
+/// `checksums.txt` / `SHA256SUMS` file. Returns `None` when neither is
+/// available — the caller falls back to "no integrity check" and logs
+/// a warning rather than refusing the download outright.
+async fn find_expected_sha256(
+    client: &reqwest::Client,
+    release: &GhRelease,
+    asset_name: &str,
+) -> Option<String> {
+    let direct_name = format!("{asset_name}.sha256");
+    if let Some(direct) = release.assets.iter().find(|a| a.name == direct_name) {
+        if let Ok(text) = client
+            .get(&direct.browser_download_url)
+            .send()
+            .await
+            .ok()?
+            .text()
+            .await
+        {
+            return parse_first_sha256_token(&text);
+        }
+    }
+    for candidate in ["checksums.txt", "SHA256SUMS", "sha256sums.txt"] {
+        if let Some(asset) = release.assets.iter().find(|a| a.name == candidate) {
+            if let Ok(text) = client
+                .get(&asset.browser_download_url)
+                .send()
+                .await
+                .ok()?
+                .text()
+                .await
+            {
+                return parse_sha256_for(&text, asset_name);
+            }
+        }
+    }
+    None
+}
+
+fn parse_first_sha256_token(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .find(|t| t.len() == 64 && t.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(|s| s.to_ascii_lowercase())
+}
+
+/// Parse a `sha256sum`-style file looking for the line whose filename
+/// column matches `asset_name` exactly. Strict equality avoids matching
+/// sibling files like `<asset>.sig` / `<asset>.asc` whose checksum
+/// would otherwise be returned and trigger a false "checksum mismatch".
+fn parse_sha256_for(text: &str, asset_name: &str) -> Option<String> {
+    for line in text.lines() {
+        // Lines look like:  <hex sha>[ \t]+[*]?<filename>
+        let mut parts = line.split_whitespace();
+        let sha = parts.next()?;
+        let name = parts.next()?.trim_start_matches('*');
+        if sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit()) && name == asset_name {
+            return Some(sha.to_ascii_lowercase());
+        }
+    }
+    None
 }
 
 async fn download_with_mirrors(
@@ -198,6 +293,7 @@ pub async fn download_cpa_update(
     download_url: String,
     version: String,
     mirrors: Option<Vec<String>>,
+    expected_sha256: Option<String>,
 ) -> Result<(), String> {
     // Refuse to overwrite binaries we don't own. The UI shouldn't reach
     // this codepath for non-managed sources, but defend in depth.
@@ -209,10 +305,7 @@ pub async fn download_cpa_update(
         ));
     }
 
-    let client = reqwest::Client::builder()
-        .user_agent("CPA-Desktop/0.1")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = download_client();
 
     let bin_dir = app_config::bin_dir(&app);
     std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
@@ -228,9 +321,16 @@ pub async fn download_cpa_update(
 
     let buf = download_with_mirrors(&app, &client, &download_url, &mirrors, &partial_path).await?;
 
-    if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
-        crate::cpa_manager::kill_cpa(&cpa_state);
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    // Integrity check before we touch anything on disk.
+    if let Some(expected) = expected_sha256.as_deref() {
+        let got = sha256_hex(&buf);
+        if !got.eq_ignore_ascii_case(expected) {
+            return Err(format!(
+                "checksum mismatch: expected {expected}, got {got} (download discarded)"
+            ));
+        }
+    } else {
+        log::warn!("no SHA256 available for {download_url}; skipping integrity check");
     }
 
     let binary_name = if cfg!(target_os = "windows") {
@@ -239,36 +339,76 @@ pub async fn download_cpa_update(
         "cli-proxy-api"
     };
 
-    // On Windows, rename the old binary before overwriting (avoids EBUSY/EACCES)
-    #[cfg(target_os = "windows")]
-    {
-        let old_path = bin_dir.join(binary_name);
-        if old_path.exists() {
-            let backup = bin_dir.join("cli-proxy-api.exe.old");
-            let _ = std::fs::remove_file(&backup); // remove stale backup
-            let _ = std::fs::rename(&old_path, &backup);
-        }
-    }
-
+    // Extract into a tempfile *first*, then atomically swap the live
+    // binary. This way a corrupted/half-written extraction never
+    // replaces a working install.
+    let staging = bin_dir.join(format!("{binary_name}.new"));
+    let _ = std::fs::remove_file(&staging);
     if download_url.ends_with(".zip") {
-        extract_zip(&buf, binary_name, &bin_dir)?;
+        extract_zip_to(&buf, binary_name, &staging)?;
     } else {
-        extract_targz(&buf, binary_name, &bin_dir)?;
+        extract_targz_to(&buf, binary_name, &staging)?;
     }
 
-    // Make executable on Unix
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let bin_path = bin_dir.join(binary_name);
-        let mut perms = std::fs::metadata(&bin_path)
+        let mut perms = std::fs::metadata(&staging)
             .map_err(|e| e.to_string())?
             .permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(&bin_path, perms).map_err(|e| e.to_string())?;
+        std::fs::set_permissions(&staging, perms).map_err(|e| e.to_string())?;
     }
 
-    // Save version
+    // Stop the running CPA before swapping the file (Windows holds an
+    // exclusive lock on a running .exe; Unix is fine but stopping is
+    // still the right behaviour because the user will want a restart).
+    if let Some(cpa_state) = app.try_state::<SharedCpaState>() {
+        crate::cpa_manager::kill_cpa(&cpa_state);
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
+
+    let live = bin_dir.join(binary_name);
+
+    // POSIX rename() atomically replaces an existing file, so we don't
+    // need a backup dance. Windows can't replace a file currently held
+    // open by a process *we* don't own (rare here since we just killed
+    // CPA), but for safety we still snapshot to `.old` and roll back
+    // when the swap fails.
+    #[cfg(target_os = "windows")]
+    let backup = {
+        let b = bin_dir.join(format!("{binary_name}.old"));
+        if live.exists() {
+            let _ = std::fs::remove_file(&b);
+            if let Err(e) = std::fs::rename(&live, &b) {
+                let _ = std::fs::remove_file(&staging);
+                return Err(format!("failed to snapshot live binary: {e}"));
+            }
+        }
+        b
+    };
+
+    if let Err(e) = std::fs::rename(&staging, &live) {
+        // Best-effort rollback: if we just renamed the old binary to
+        // `.old`, restore it so the user is left with a *working* CPA
+        // rather than no binary at all.
+        #[cfg(target_os = "windows")]
+        {
+            if backup.exists() {
+                if let Err(re) = std::fs::rename(&backup, &live) {
+                    log::error!(
+                        "rollback failed after swap error: {re}. Manual recovery: \
+                         move {} back to {}",
+                        backup.display(),
+                        live.display()
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&staging);
+        return Err(format!("failed to swap binary: {e}"));
+    }
+
     let mut settings = app_config::load_settings(&app);
     settings.cpa_version = Some(version);
     app_config::save_settings(&app, &settings)?;
@@ -277,7 +417,21 @@ pub async fn download_cpa_update(
     Ok(())
 }
 
-fn extract_zip(data: &[u8], binary_name: &str, dest: &std::path::Path) -> Result<(), String> {
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
+}
+
+/// Extract `binary_name` from `data` into `out_path` exactly. Caller
+/// chooses the destination path so we can stage to `<binary>.new` and
+/// atomically swap.
+fn extract_zip_to(
+    data: &[u8],
+    binary_name: &str,
+    out_path: &std::path::Path,
+) -> Result<(), String> {
     use std::io::Read;
     let cursor = std::io::Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
@@ -288,19 +442,21 @@ fn extract_zip(data: &[u8], binary_name: &str, dest: &std::path::Path) -> Result
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_default();
-
         if file_name == binary_name {
-            let out_path = dest.join(binary_name);
             let mut content = Vec::new();
             file.read_to_end(&mut content).map_err(|e| e.to_string())?;
-            std::fs::write(&out_path, content).map_err(|e| e.to_string())?;
+            crate::app_config::atomic_write(out_path, &content).map_err(|e| e.to_string())?;
             return Ok(());
         }
     }
     Err(format!("{binary_name} not found in zip"))
 }
 
-fn extract_targz(data: &[u8], binary_name: &str, dest: &std::path::Path) -> Result<(), String> {
+fn extract_targz_to(
+    data: &[u8],
+    binary_name: &str,
+    out_path: &std::path::Path,
+) -> Result<(), String> {
     use flate2::read::GzDecoder;
     use std::io::Read;
     use tar::Archive;
@@ -316,12 +472,10 @@ fn extract_targz(data: &[u8], binary_name: &str, dest: &std::path::Path) -> Resu
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_default();
-
         if file_name == binary_name {
-            let out_path = dest.join(binary_name);
             let mut content = Vec::new();
             entry.read_to_end(&mut content).map_err(|e| e.to_string())?;
-            std::fs::write(&out_path, content).map_err(|e| e.to_string())?;
+            crate::app_config::atomic_write(out_path, &content).map_err(|e| e.to_string())?;
             return Ok(());
         }
     }
@@ -361,6 +515,60 @@ mod tests {
         let url = "https://github.com/x/y/releases/download/v1/file.tar.gz";
         assert_eq!(apply_mirror(url, "github.com"), url);
         assert_eq!(apply_mirror(url, ""), url);
+    }
+
+    #[test]
+    fn semver_compare_picks_newer_patch() {
+        assert!(newer_than("v1.2.4", Some("v1.2.3")));
+        assert!(!newer_than("v1.2.3", Some("v1.2.3")));
+        assert!(!newer_than("v1.2.3", Some("v1.2.4")));
+    }
+
+    #[test]
+    fn semver_strips_v_prefix() {
+        assert!(newer_than("v1.10.0", Some("1.9.999")));
+    }
+
+    #[test]
+    fn semver_handles_missing_current() {
+        assert!(newer_than("v1.0.0", None));
+    }
+
+    #[test]
+    fn parse_sha256_from_checksums_txt() {
+        let text = "abcd  irrelevant\n\
+                    deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  CLIProxyAPI_1.2.3_linux_amd64.tar.gz\n";
+        let s = parse_sha256_for(text, "CLIProxyAPI_1.2.3_linux_amd64.tar.gz").unwrap();
+        assert_eq!(s.len(), 64);
+        assert!(s.starts_with("deadbeef"));
+    }
+
+    #[test]
+    fn parse_sha256_does_not_match_signature_sibling() {
+        let text = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  CLIProxyAPI_1.2.3_linux_amd64.tar.gz.sig\n\
+                    cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe  CLIProxyAPI_1.2.3_linux_amd64.tar.gz\n\
+                    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  CLIProxyAPI_1.2.3_linux_amd64.tar.gz.asc\n";
+        let s = parse_sha256_for(text, "CLIProxyAPI_1.2.3_linux_amd64.tar.gz").unwrap();
+        assert!(s.starts_with("cafebabe"), "matched wrong line: {s}");
+    }
+
+    #[test]
+    fn parse_sha256_handles_binary_mode_star_prefix() {
+        let text = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef *asset.tgz\n";
+        let s = parse_sha256_for(text, "asset.tgz").unwrap();
+        assert_eq!(s.len(), 64);
+    }
+
+    #[test]
+    fn parse_sha256_returns_none_when_no_match() {
+        let text = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  other.tgz\n";
+        assert!(parse_sha256_for(text, "asset.tgz").is_none());
+    }
+
+    #[test]
+    fn parse_sha256_from_single_line_file() {
+        let text = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  asset.tgz\n";
+        assert!(parse_first_sha256_token(text).is_some());
     }
 
     #[test]
