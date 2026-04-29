@@ -1,7 +1,203 @@
 use crate::app_config::{self, AppSettings};
 use crate::cpa_manager::SharedCpaState;
+use base64::Engine;
+use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
+
+/// Snapshot of "is the user ready to actually use CPA?" — the single source
+/// of truth that the first-run wizard reads to decide which steps to show.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupStatus {
+    /// CPA binary exists at the resolved path.
+    pub binary_present: bool,
+    /// `config.yaml` exists at the resolved path.
+    pub config_present: bool,
+    /// `remote-management.secret-key` is non-empty (otherwise management API → 404).
+    pub secret_key_set: bool,
+    /// `api-keys` is non-empty AND contains no `your-api-key-*` placeholder.
+    pub api_keys_configured: bool,
+    /// Something is already answering the configured port — we should attach
+    /// rather than spawn (covers `brew services start cliproxyapi`).
+    pub cpa_already_running: bool,
+    /// Active install source kind, surfaced to the wizard so it can adapt
+    /// (e.g. external sources skip the download step).
+    pub install_source_kind: String,
+}
+
+#[tauri::command]
+pub async fn get_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
+    let settings = app_config::load_settings(&app);
+    let binary = app_config::cpa_binary_path(&app);
+    let config_path = app_config::config_yaml_path(&app);
+
+    let binary_present = binary.exists();
+    let config_present = config_path.exists();
+
+    let (secret_key_set, api_keys_configured) = if config_present {
+        match std::fs::read_to_string(&config_path) {
+            Ok(raw) => match serde_yaml::from_str::<serde_yaml::Value>(&raw) {
+                Ok(doc) => (config_has_secret_key(&doc), config_has_real_api_keys(&doc)),
+                Err(_) => (false, false),
+            },
+            Err(_) => (false, false),
+        }
+    } else {
+        (false, false)
+    };
+
+    let cpa_already_running = crate::http_health(settings.port, &settings.health_path).await;
+    let install_source_kind = match &settings.install_source {
+        crate::install_source::InstallSource::Managed => "managed",
+        crate::install_source::InstallSource::Homebrew { .. } => "homebrew",
+        crate::install_source::InstallSource::SystemPath { .. } => "systemPath",
+        crate::install_source::InstallSource::Custom { .. } => "custom",
+    }
+    .to_string();
+
+    Ok(SetupStatus {
+        binary_present,
+        config_present,
+        secret_key_set,
+        api_keys_configured,
+        cpa_already_running,
+        install_source_kind,
+    })
+}
+
+fn config_has_secret_key(doc: &serde_yaml::Value) -> bool {
+    let Some(rm) = doc.get("remote-management") else {
+        return false;
+    };
+    let Some(key) = rm.get("secret-key") else {
+        return false;
+    };
+    key.as_str().map(|s| !s.trim().is_empty()).unwrap_or(false)
+}
+
+fn config_has_real_api_keys(doc: &serde_yaml::Value) -> bool {
+    let Some(arr) = doc.get("api-keys").and_then(|v| v.as_sequence()) else {
+        return false;
+    };
+    if arr.is_empty() {
+        return false;
+    }
+    arr.iter().all(|item| {
+        item.as_str()
+            .map(|s| {
+                let trimmed = s.trim();
+                !trimmed.is_empty() && !trimmed.starts_with("your-api-key")
+            })
+            .unwrap_or(false)
+    })
+}
+
+/// Generate a cryptographically strong secret. Returns 32 random bytes
+/// encoded as base64url without padding (~43 chars). Used for both
+/// `remote-management.secret-key` and `api-keys` entries.
+#[tauri::command]
+pub fn generate_secret() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// Initialize the managed config.yaml with a generated secret-key and one
+/// generated api-key, returning the values so the wizard can show them.
+/// Idempotent: if secret-key / api-keys are already set, the existing
+/// values are preserved and returned.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializedCredentials {
+    pub secret_key: String,
+    pub api_keys: Vec<String>,
+}
+
+#[tauri::command]
+pub fn initialize_credentials(app: AppHandle) -> Result<InitializedCredentials, String> {
+    // Make sure config.yaml exists (managed source only). For external
+    // sources we never overwrite — return what's already there if present.
+    app_config::ensure_config_yaml(&app)?;
+    let path = app_config::config_yaml_path(&app);
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut doc: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(Default::default())
+    } else {
+        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
+    };
+
+    // Ensure remote-management.secret-key
+    let secret_key = {
+        let map = doc
+            .as_mapping_mut()
+            .ok_or_else(|| "config root is not a mapping".to_string())?;
+        let rm_key = serde_yaml::Value::String("remote-management".into());
+        if !map.contains_key(&rm_key) {
+            map.insert(
+                rm_key.clone(),
+                serde_yaml::Value::Mapping(Default::default()),
+            );
+        }
+        let rm = map.get_mut(&rm_key).unwrap();
+        let rm_map = rm
+            .as_mapping_mut()
+            .ok_or_else(|| "remote-management is not a mapping".to_string())?;
+        let sk_key = serde_yaml::Value::String("secret-key".into());
+        let existing = rm_map
+            .get(&sk_key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        if existing.is_empty() {
+            let new_key = generate_secret();
+            rm_map.insert(sk_key, serde_yaml::Value::String(new_key.clone()));
+            new_key
+        } else {
+            existing
+        }
+    };
+
+    // Ensure api-keys has at least one real entry
+    let api_keys = {
+        let map = doc.as_mapping_mut().unwrap();
+        let ak_key = serde_yaml::Value::String("api-keys".into());
+        let needs_seed = match map.get(&ak_key) {
+            None => true,
+            Some(serde_yaml::Value::Sequence(seq)) => seq.is_empty()
+                || seq.iter().any(|v| {
+                    v.as_str()
+                        .map(|s| s.trim().is_empty() || s.trim().starts_with("your-api-key"))
+                        .unwrap_or(true)
+                }),
+            _ => true,
+        };
+        if needs_seed {
+            let new_key = generate_secret();
+            map.insert(
+                ak_key.clone(),
+                serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(new_key)]),
+            );
+        }
+        map.get(&ak_key)
+            .and_then(|v| v.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+
+    let serialized = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
+    app_config::atomic_write(&path, serialized.as_bytes()).map_err(|e| e.to_string())?;
+
+    Ok(InitializedCredentials {
+        secret_key,
+        api_keys,
+    })
+}
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> AppSettings {
@@ -242,6 +438,82 @@ pub fn open_data_dir(app: AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generate_secret_is_url_safe_and_long_enough() {
+        let s = generate_secret();
+        assert!(s.len() >= 40, "secret too short: {} chars", s.len());
+        assert!(
+            s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            "secret contains non-url-safe char: {s}"
+        );
+        let s2 = generate_secret();
+        assert_ne!(s, s2, "two consecutive generations must differ");
+    }
+
+    #[test]
+    fn config_has_secret_key_detects_empty_and_set() {
+        let empty: serde_yaml::Value =
+            serde_yaml::from_str("remote-management:\n  secret-key: ''\n").unwrap();
+        assert!(!config_has_secret_key(&empty));
+
+        let set: serde_yaml::Value =
+            serde_yaml::from_str("remote-management:\n  secret-key: 'abc123'\n").unwrap();
+        assert!(config_has_secret_key(&set));
+
+        let missing: serde_yaml::Value = serde_yaml::from_str("port: 8317\n").unwrap();
+        assert!(!config_has_secret_key(&missing));
+
+        let whitespace: serde_yaml::Value =
+            serde_yaml::from_str("remote-management:\n  secret-key: '   '\n").unwrap();
+        assert!(!config_has_secret_key(&whitespace));
+    }
+
+    #[test]
+    fn config_has_real_api_keys_rejects_placeholder() {
+        let placeholder: serde_yaml::Value = serde_yaml::from_str(
+            "api-keys:\n  - your-api-key-1\n  - your-api-key-2\n",
+        )
+        .unwrap();
+        assert!(!config_has_real_api_keys(&placeholder));
+
+        let mixed: serde_yaml::Value =
+            serde_yaml::from_str("api-keys:\n  - real-key-abc\n  - your-api-key-1\n").unwrap();
+        assert!(!config_has_real_api_keys(&mixed));
+
+        let real: serde_yaml::Value =
+            serde_yaml::from_str("api-keys:\n  - real-key-abc\n  - real-key-def\n").unwrap();
+        assert!(config_has_real_api_keys(&real));
+
+        let empty: serde_yaml::Value = serde_yaml::from_str("api-keys: []\n").unwrap();
+        assert!(!config_has_real_api_keys(&empty));
+
+        let missing: serde_yaml::Value = serde_yaml::from_str("port: 8317\n").unwrap();
+        assert!(!config_has_real_api_keys(&missing));
+    }
+
+    #[test]
+    fn read_write_config_field_round_trips_dashed_keys() {
+        let mut doc: serde_yaml::Value = serde_yaml::from_str("port: 8317\n").unwrap();
+        set_path(
+            &mut doc,
+            "remote-management.secret-key",
+            serde_json::json!("abc-123"),
+        )
+        .unwrap();
+        let out = serde_yaml::to_string(&doc).unwrap();
+        assert!(out.contains("remote-management:"));
+        assert!(out.contains("secret-key: abc-123"));
+
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&out).unwrap();
+        let v = parsed
+            .get("remote-management")
+            .and_then(|m| m.get("secret-key"))
+            .and_then(|v| v.as_str())
+            .unwrap();
+        assert_eq!(v, "abc-123");
+    }
 
     #[test]
     fn prune_backups_keeps_only_n_newest() {

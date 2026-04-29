@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sidebar, type Page } from '@/components/Sidebar'
 import { StatusBar } from '@/components/StatusBar'
-import { FirstRunSetup } from '@/components/FirstRunSetup'
+import { SetupWizard } from '@/components/setup/SetupWizard'
 import { Toaster } from '@/components/ui'
 import { Dashboard } from '@/pages/Dashboard'
 import { Logs } from '@/pages/Logs'
@@ -14,20 +14,24 @@ import { useSettingsStore } from '@/stores/settings'
 import {
   applyAppUpdate,
   checkAppUpdate,
-  checkCpaRunning,
-  cpaBinaryExists,
   detectInstallSources,
-  getInstallSourceInfo,
   getSettings,
+  getSetupStatus,
   setInstallSource,
+  type SetupStatus,
 } from '@/lib/tauri'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
 
+type BootState =
+  | { kind: 'probing' }
+  | { kind: 'needsSetup'; status: SetupStatus }
+  | { kind: 'ready' }
+
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
-  const [binaryReady, setBinaryReady] = useState<boolean | null>(null)
+  const [boot, setBoot] = useState<BootState>({ kind: 'probing' })
   const [, setPrevPage] = useState<Page>('dashboard')
 
   const { initialize: initCpa } = useCpaStore()
@@ -53,58 +57,63 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    // First-run setup is the managed download flow. For external install
-    // sources (Homebrew / SystemPath / Custom) we trust the user — even
-    // if validation fails, the Settings → Install Source card will guide
-    // them; we don't pop the managed-download wizard.
-    //
-    // For a fresh install whose settings still default to `managed` we go
-    // a step further and try to avoid the wizard entirely:
-    //   1. If something is already responding on the configured port
-    //      (typical case: `brew services start cliproxyapi` is running),
-    //      we don't need to download anything — just connect.
-    //   2. If a Homebrew or SystemPath install is auto-detected on disk,
-    //      switch the active source to it and skip the wizard.
-    // Only when none of those hold do we fall back to the managed
-    // download wizard.
+    // Boot probe — decide whether to show the setup wizard or the main
+    // app. The rules:
+    //   1. Something is already answering on the configured port (e.g.
+    //      `brew services start cliproxyapi`). Just attach.
+    //   2. External install source (Homebrew / SystemPath / Custom) →
+    //      trust the user. They're responsible for config.yaml and
+    //      secret-key. The dashboard's mgmt-unavailable overlay (Phase 3)
+    //      will surface problems if any.
+    //   3. Managed source: if a Homebrew/SystemPath install is detected
+    //      on disk, switch to it (zero-touch upgrade path) and skip.
+    //   4. Otherwise, run the wizard if anything is missing: binary,
+    //      config.yaml, secret-key, or real api-keys.
     void (async () => {
       try {
-        const info = await getInstallSourceInfo()
-        if (info.source.kind !== 'managed') {
-          setBinaryReady(true)
+        const status = await getSetupStatus()
+        if (status.cpaAlreadyRunning) {
+          setBoot({ kind: 'ready' })
           return
         }
-        const managedExists = await cpaBinaryExists().catch(() => false)
-        if (managedExists) {
-          setBinaryReady(true)
+        if (status.installSourceKind !== 'managed') {
+          setBoot({ kind: 'ready' })
           return
         }
-        const alreadyUp = await checkCpaRunning().catch(() => false)
-        if (alreadyUp) {
-          setBinaryReady(true)
-          return
+        // Try zero-touch upgrade: if Homebrew or SystemPath is present
+        // and we've never run, switch to it before deciding.
+        if (!status.binaryPresent) {
+          const detected = await detectInstallSources().catch(() => null)
+          const candidate =
+            detected?.homebrew?.source ?? detected?.systemPath?.source ?? null
+          if (candidate) {
+            await setInstallSource(candidate).catch((e) =>
+              console.error('auto-switch install source failed', e),
+            )
+            setBoot({ kind: 'ready' })
+            return
+          }
         }
-        const detected = await detectInstallSources().catch(() => null)
-        const candidate =
-          detected?.homebrew?.source ?? detected?.systemPath?.source ?? null
-        if (candidate) {
-          await setInstallSource(candidate).catch((e) =>
-            console.error('auto-switch install source failed', e),
-          )
-          setBinaryReady(true)
-          return
-        }
-        setBinaryReady(false)
+        const setupComplete =
+          status.binaryPresent &&
+          status.configPresent &&
+          status.secretKeySet &&
+          status.apiKeysConfigured
+        setBoot(
+          setupComplete ? { kind: 'ready' } : { kind: 'needsSetup', status },
+        )
       } catch (err) {
-        console.error('install source probe failed; falling back to legacy probe', err)
-        const exists = await cpaBinaryExists().catch(() => false)
-        setBinaryReady(exists)
+        console.error('setup probe failed; assuming ready', err)
+        // Best-effort fallback: if we can't probe, get the user into the
+        // main app rather than block them. The dashboard overlay will
+        // tell them what's wrong if anything actually is.
+        setBoot({ kind: 'ready' })
       }
     })()
   }, [])
 
   useEffect(() => {
-    if (binaryReady === null) return
+    if (boot.kind === 'probing') return
     initCpa().then((fn) => unlistenRefs.current.push(fn))
     initLogs().then((fn) => unlistenRefs.current.push(fn))
     return () => {
@@ -112,15 +121,29 @@ export default function App() {
       unlistenRefs.current = []
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [binaryReady])
+  }, [boot.kind])
 
   const handlePageChange = (p: Page) => {
     setPrevPage(page)
     setPage(p)
   }
 
+  // Cross-component navigation (e.g. Dashboard's mgmt-unavailable overlay
+  // jumping to Settings). Avoids prop drilling through Sidebar/Pages.
   useEffect(() => {
-    if (binaryReady !== true) return
+    const onNav = (e: Event) => {
+      const detail = (e as CustomEvent<{ page?: Page }>).detail
+      if (detail?.page) handlePageChange(detail.page)
+    }
+    window.addEventListener('cpa-navigate', onNav)
+    return () => window.removeEventListener('cpa-navigate', onNav)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
+
+  const ready = boot.kind === 'ready'
+
+  useEffect(() => {
+    if (!ready) return
     let cancelled = false
     const bindings: Array<[string, () => void]> = [
       ['CmdOrCtrl+,', () => setPage('settings')],
@@ -142,10 +165,10 @@ export default function App() {
         unregister(key).catch(() => {})
       })
     }
-  }, [binaryReady])
+  }, [ready])
 
   useEffect(() => {
-    if (binaryReady !== true) return
+    if (!ready) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     void getSettings().then(async (s) => {
@@ -175,10 +198,10 @@ export default function App() {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [binaryReady])
+  }, [ready])
 
   useEffect(() => {
-    if (binaryReady !== true) return
+    if (!ready) return
     let unlisten: UnlistenFn | null = null
     void listen('app:check-updates', async () => {
       try {
@@ -196,9 +219,9 @@ export default function App() {
     return () => {
       unlisten?.()
     }
-  }, [binaryReady])
+  }, [ready])
 
-  if (binaryReady === null) {
+  if (boot.kind === 'probing') {
     return (
       <div
         style={{
@@ -223,8 +246,13 @@ export default function App() {
     )
   }
 
-  if (!binaryReady) {
-    return <FirstRunSetup onComplete={() => setBinaryReady(true)} />
+  if (boot.kind === 'needsSetup') {
+    return (
+      <SetupWizard
+        initial={boot.status}
+        onComplete={() => setBoot({ kind: 'ready' })}
+      />
+    )
   }
 
   return (

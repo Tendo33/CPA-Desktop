@@ -39,7 +39,17 @@ export function SettingsPage() {
   const [yamlPort, setYamlPort] = useState<number | null>(null)
   const [updateMsg, setUpdateMsg] = useState('')
   const [configTab, setConfigTab] = useState<'form' | 'yaml'>('form')
+  const [needsRestart, setNeedsRestart] = useState(false)
   const theme = useSettingsStore((s) => s.theme)
+
+  useEffect(() => {
+    const onDirty = (e: Event) => {
+      const detail = (e as CustomEvent<{ needsRestart?: boolean }>).detail
+      if (detail?.needsRestart) setNeedsRestart(true)
+    }
+    window.addEventListener('cpa-config-dirty', onDirty)
+    return () => window.removeEventListener('cpa-config-dirty', onDirty)
+  }, [])
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -150,6 +160,7 @@ export function SettingsPage() {
   const handleRestartCpa = async () => {
     if (status.kind === 'Running') await stopCpa()
     setTimeout(() => startCpa(), 500)
+    setNeedsRestart(false)
   }
 
   if (!settings) {
@@ -177,6 +188,38 @@ export function SettingsPage() {
       style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
     >
       <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
+        {/* ── Restart-required banner ────────────────────────────── */}
+        {needsRestart && (
+          <div
+            style={{
+              padding: '10px 14px',
+              background: 'var(--c-accent-bg)',
+              border: '1px solid var(--c-accent-dim)',
+              borderRadius: 8,
+              fontSize: 12,
+              color: 'var(--c-text-1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>{t.settings.restartRequiredBanner}</span>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <Button size="sm" onClick={handleRestartCpa}>
+                {t.settings.restartNow}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setNeedsRestart(false)}
+              >
+                {t.settings.dismiss}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Install source ─────────────────────────────────────── */}
         <InstallSourceCard />
 

@@ -73,6 +73,14 @@ export const en = {
     autoCheckHint: 'Once every 6 hours',
     mirrors: 'Download mirrors',
     mirrorsHint: 'Comma-separated host list, tried in order',
+    restartRequiredBanner:
+      'Configuration changed. Restart CPA for the new port / secret-key / api-keys to take effect.',
+    restartNow: 'Restart now',
+    dismiss: 'Dismiss',
+    resetSecretConfirmTitle: 'Reset management secret key?',
+    resetSecretConfirmBody:
+      'A new strong key will be generated. Any signed-in management session (including the panel embedded above) will stop working until you copy the new key.',
+    resetSecretCta: 'Generate new key',
   },
   about: {
     subtitle: 'Desktop manager for CLIProxyAPI',
@@ -98,6 +106,44 @@ export const en = {
     downloadBtn: 'Download CLIProxyAPI',
     downloading: 'Downloading…',
     noInternet: 'Could not fetch release info. Check your internet connection.',
+  },
+  setup: {
+    title: 'Welcome to CPA Desktop',
+    subtitle: 'A 30-second setup gets you a running, secured CLIProxyAPI.',
+    stepDownload: 'Download',
+    stepConfigure: 'Configure',
+    stepLaunch: 'Launch',
+    portLabel: 'Listening port',
+    portHint: 'CPA will bind to this port. We check it isn\'t in use.',
+    portInUse: (p: number) => `Port ${p} is already in use. Try ${p + 1}.`,
+    secretLabel: 'Management secret key',
+    secretHint:
+      "You'll use this to log into CPA's management panel. We generated a strong random one for you.",
+    apiKeysLabel: 'Client API key',
+    apiKeysHint:
+      'Bearer token your apps send to CPA\'s /v1 endpoints. Add more later in Settings.',
+    actionInitialize: 'Save & Launch CPA',
+    initializing: 'Writing config and starting CPA…',
+    launchFailed: 'CPA failed to start',
+    launchFailedRetry: 'Retry',
+    launchFailedOpenLogs: 'Open logs',
+    doneTitle: 'CPA is running',
+    doneSubtitle:
+      'Your management secret key is shown below. Copy it now — you\'ll need it if you ever sign in from another machine.',
+    doneCta: 'Open management panel',
+    autoLoginNote: 'You\'ll be signed into the panel automatically.',
+    copyWarning: 'Save these somewhere safe. You can always view them again in Settings.',
+  },
+  bootProbe: 'Probing CPA install…',
+  mgmtUnavailable: {
+    titleNoKey: 'Management API is disabled',
+    bodyNoKey:
+      'The management secret key is empty, so all /v0/management routes return 404. Generate one in Settings to use the panel.',
+    titleUnauthorized: 'Management session expired',
+    bodyUnauthorized:
+      'Your management secret key may have changed. Reload the panel and sign in with the current key from Settings.',
+    goToSettings: 'Open Settings',
+    reload: 'Reload panel',
   },
   authFiles: {
     title: 'Batch Auth-File Export',

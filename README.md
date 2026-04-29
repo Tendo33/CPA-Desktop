@@ -140,10 +140,43 @@ Produces platform-native installers in `src-tauri/target/release/bundle/`.
 
 ## How it works
 
-1. On first launch (Managed source), CPA Desktop downloads the CPA binary from GitHub releases into your app data folder
-2. It starts CPA as a hidden subprocess (no console window on Windows) using the resolved install-source paths
-3. The management panel (`/management.html#/quota`) loads in a native webview
-4. CPA's static panel files are auto-managed by CPA itself
+### First-run setup
+
+The very first time you launch CPA Desktop on a fresh machine (Managed
+source), a short wizard guides you through everything CPA needs in order
+to actually answer requests:
+
+1. **Download** — fetches the latest CPA binary from GitHub releases
+   into your app data folder (skipped if the binary is already there or
+   if a Homebrew / system-package install was auto-detected)
+2. **Configure** — picks a listening port and seeds `config.yaml`:
+    - Generates a strong random `remote-management.secret-key` (without
+      it, CPA's management API returns `404` for everything)
+    - Generates one client `api-keys` entry so apps can immediately call
+      `/v1/*` with `Authorization: Bearer <key>`
+3. **Launch** — starts CPA, waits for the health probe, and shows you
+   the generated credentials with a copy button. **Save them now** —
+   they are stored in `config.yaml` (you can always view them again from
+   Settings → Config), but you'll need them to sign in from another
+   machine
+
+After the wizard finishes, the embedded management panel auto-logs-in
+with the freshly generated key. No copy-paste required.
+
+If something is already answering on the configured port (e.g.
+`brew services start cliproxyapi`), the wizard is skipped and the app
+attaches to the existing CPA.
+
+### Steady state
+
+1. CPA runs as a hidden subprocess (no console window on Windows) using
+   the resolved install-source paths
+2. The management panel (`/management.html#/quota`) loads in a native
+   webview, with localStorage seeded so the panel auto-logs-in
+3. CPA's static panel files are auto-managed by CPA itself
+4. If the management API ever stops authenticating (key rotated, key
+   cleared) the dashboard surfaces a self-explanatory overlay with a
+   link straight to Settings — no white-screen webviews
 5. On close, the app minimizes to the system tray
 
 ### Data directory

@@ -20,6 +20,7 @@ remote-management:
   # Management key. If a plaintext value is provided here, it will be hashed on startup.
   # All management requests (even from localhost) require this key.
   # Leave empty to disable the Management API entirely (404 for all /v0/management routes).
+  # CPA Desktop will auto-generate a strong random value on first run.
   secret-key: ''
 
   # Disable the bundled management control panel asset download and HTTP route when true.
@@ -35,11 +36,11 @@ remote-management:
 # Authentication directory (supports ~ for home directory)
 auth-dir: '~/.cli-proxy-api'
 
-# API keys for authentication
-api-keys:
-  - 'your-api-key-1'
-  - 'your-api-key-2'
-  - 'your-api-key-3'
+# API keys for authentication.
+# Clients call CPA's /v1 routes with `Authorization: Bearer <api-key>`.
+# Leave empty here — CPA Desktop will generate one on first run and show
+# it to you. You can add more keys later from Settings → Config.
+api-keys: []
 
 # Enable debug logging
 debug: false

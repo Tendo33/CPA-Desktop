@@ -99,6 +99,26 @@ export const cpaBinaryExists = () => invoke<boolean>('cpa_binary_exists')
 export const getLogHistory = () => invoke<LogLine[]>('get_log_history')
 export const clearLogs = () => invoke<void>('clear_logs')
 
+// First-run / setup status
+export interface SetupStatus {
+  binaryPresent: boolean
+  configPresent: boolean
+  secretKeySet: boolean
+  apiKeysConfigured: boolean
+  cpaAlreadyRunning: boolean
+  installSourceKind: 'managed' | 'homebrew' | 'systemPath' | 'custom'
+}
+
+export interface InitializedCredentials {
+  secretKey: string
+  apiKeys: string[]
+}
+
+export const getSetupStatus = () => invoke<SetupStatus>('get_setup_status')
+export const generateSecret = () => invoke<string>('generate_secret')
+export const initializeCredentials = () =>
+  invoke<InitializedCredentials>('initialize_credentials')
+
 // Config / settings
 export const getSettings = () => invoke<AppSettings>('get_settings')
 export const saveSettings = (settings: AppSettings) =>
@@ -163,6 +183,12 @@ export async function applyAppUpdate(update: Update): Promise<void> {
 export const reportFrontendError = (message: string, stack?: string) =>
   invoke<void>('report_frontend_error', { message, stack })
 export const openLogsFolder = () => invoke<void>('open_logs_folder')
+export const evalInWebview = (label: string, script: string) =>
+  invoke<void>('eval_in_webview', { label, script })
+
+export type MgmtProbeResult = 'ok' | 'noKey' | 'unauthorized' | 'down'
+export const probeManagementApi = () =>
+  invoke<MgmtProbeResult>('probe_management_api')
 
 // Auth-file batch export
 export interface AuthFileInfo {

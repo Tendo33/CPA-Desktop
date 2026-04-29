@@ -23,6 +23,12 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
         let _ = app.emit("cpa:status", &CpaStatus::Idle);
         return Err("CPA binary not present".into());
     }
+    // Safety net: managed source may have an older build that skipped
+    // bootstrap. ensure_config_yaml is a no-op for external sources and
+    // when the file already exists.
+    if let Err(e) = app_config::ensure_config_yaml(&app) {
+        log::warn!("ensure_config_yaml before start failed: {e}");
+    }
     // If something already answers our health probe on the port, assume
     // it's a CPA we should attach to (the original "external CPA"
     // handoff behaviour).

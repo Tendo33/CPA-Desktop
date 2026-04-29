@@ -1,10 +1,19 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CpaWebView, type CpaWebViewHandle } from '@/components/CpaWebView'
 import { useCpaStore } from '@/stores/cpa'
-import { getSettings, saveSettings, startCpa, writeConfigYamlPort } from '@/lib/tauri'
+import {
+  getSettings,
+  probeManagementApi,
+  readConfigField,
+  saveSettings,
+  startCpa,
+  writeConfigYamlPort,
+  type MgmtProbeResult,
+} from '@/lib/tauri'
 import { errorOf, isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
 import { useT } from '@/lib/i18n'
 import { Button } from '@/components/ui'
+import { MgmtUnavailableOverlay } from '@/components/MgmtUnavailableOverlay'
 
 export function Dashboard() {
   const { status, port } = useCpaStore()
@@ -34,6 +43,57 @@ export function Dashboard() {
   }
 
   const managementUrl = `http://localhost:${port}/management.html#/quota`
+  const apiBase = `http://localhost:${port}`
+
+  // Pull the latest secret-key whenever CPA enters Running so the
+  // injected auto-login uses the current credentials. Re-runs on
+  // restart in case the user rotated the key.
+  const [secretKey, setSecretKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (!running) return
+    let cancelled = false
+    void readConfigField<string>('remote-management.secret-key')
+      .then((k) => {
+        if (cancelled) return
+        const trimmed = typeof k === 'string' ? k.trim() : ''
+        setSecretKey(trimmed.length > 0 ? trimmed : null)
+      })
+      .catch(() => setSecretKey(null))
+    return () => {
+      cancelled = true
+    }
+  }, [running])
+
+  // Probe the management API once CPA is Running. If it returns 401/404
+  // we cover the broken webview with a self-explanatory overlay rather
+  // than letting the user stare at "404 page not found" inside the
+  // panel.
+  const [mgmtProbe, setMgmtProbe] = useState<MgmtProbeResult | null>(null)
+  // Drop the cached probe whenever CPA leaves Running so we don't show
+  // a stale overlay on the next start. Computed here (not via setState
+  // inside the probe effect) to keep that effect free of cascading
+  // renders.
+  const probeForRender = running ? mgmtProbe : null
+  useEffect(() => {
+    if (!running) return
+    let cancelled = false
+    // Small delay so the probe runs after the page boots and the auto-login
+    // injection has had a chance to set localStorage. Even if it hasn't,
+    // we're testing the *server*, not the browser session.
+    const t = setTimeout(() => {
+      void probeManagementApi()
+        .then((r) => {
+          if (!cancelled) setMgmtProbe(r)
+        })
+        .catch(() => {
+          if (!cancelled) setMgmtProbe('down')
+        })
+    }, 800)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [running, secretKey])
 
   return (
     <div
@@ -45,7 +105,27 @@ export function Dashboard() {
         overflow: 'hidden',
       }}
     >
-      <CpaWebView ref={webviewRef} url={managementUrl} visible={running} />
+      <CpaWebView
+        ref={webviewRef}
+        url={managementUrl}
+        visible={running}
+        autoLogin={secretKey ? { apiBase, secretKey } : null}
+      />
+
+      {probeForRender && probeForRender !== 'ok' && probeForRender !== 'down' && (
+        <MgmtUnavailableOverlay
+          reason={probeForRender}
+          onGoToSettings={() =>
+            window.dispatchEvent(
+              new CustomEvent('cpa-navigate', { detail: { page: 'settings' } }),
+            )
+          }
+          onReload={() => {
+            setMgmtProbe(null)
+            webviewRef.current?.reload()
+          }}
+        />
+      )}
 
       {/* Starting overlay */}
       {starting && (
