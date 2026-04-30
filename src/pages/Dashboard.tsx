@@ -116,9 +116,7 @@ export function Dashboard() {
         <MgmtUnavailableOverlay
           reason={probeForRender}
           onGoToSettings={() =>
-            window.dispatchEvent(
-              new CustomEvent('cpa-navigate', { detail: { page: 'settings' } }),
-            )
+            window.dispatchEvent(new CustomEvent('cpa-navigate', { detail: { page: 'settings' } }))
           }
           onReload={() => {
             setMgmtProbe(null)
@@ -176,7 +174,7 @@ export function Dashboard() {
                   fontSize: 32,
                   fontWeight: 600,
                   color: 'var(--c-text-1)',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: 0,
                   lineHeight: 1.1,
                 }}
               >
@@ -227,7 +225,7 @@ export function Dashboard() {
                   fontSize: 28,
                   fontWeight: 700,
                   color: 'var(--c-accent)',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: 0,
                 }}
               >
                 C
@@ -240,7 +238,7 @@ export function Dashboard() {
                   fontSize: 32,
                   fontWeight: 600,
                   color: 'var(--c-text-1)',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: 0,
                   lineHeight: 1.1,
                 }}
               >
@@ -299,7 +297,7 @@ export function Dashboard() {
                   fontSize: 32,
                   fontWeight: 600,
                   color: 'var(--c-text-1)',
-                  letterSpacing: '-0.02em',
+                  letterSpacing: 0,
                   lineHeight: 1.1,
                 }}
               >
@@ -334,7 +332,7 @@ export function Dashboard() {
                     lineHeight: 1.5,
                   }}
                 >
-                  Port {portInUseMatch[1]} is already in use.
+                  {t.dashboard.portInUse(portInUseMatch[1])}
                 </div>
               )}
             </div>
@@ -345,7 +343,7 @@ export function Dashboard() {
                 size="lg"
                 style={{ marginTop: 8, padding: '0 24px', height: 44, fontSize: 14 }}
               >
-                Try port {Number(portInUseMatch[1]) + 1}
+                {t.dashboard.tryPort(Number(portInUseMatch[1]) + 1)}
               </Button>
             ) : (
               <Button

@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useState, type InputHTMLAttributes } from 'rea
 import { Eye, EyeOff, Copy, RefreshCw, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/stores/toast'
+import { useT } from '@/lib/i18n'
 
 export interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** When provided, renders a "regenerate" icon button next to the eye toggle. */
@@ -14,6 +15,7 @@ export interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputEl
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ onRegenerate, copyable = true, wrapperClassName, className, value, ...rest }, ref) => {
+    const t = useT()
     const [revealed, setRevealed] = useState(false)
     const [copied, setCopied] = useState(false)
 
@@ -23,17 +25,17 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
       try {
         await navigator.clipboard.writeText(text)
         setCopied(true)
-        toast.success('Copied to clipboard')
+        toast.success(t.common.copiedToClipboard)
         setTimeout(() => setCopied(false), 1500)
       } catch (e) {
-        toast.error(`Copy failed: ${String(e)}`)
+        toast.error(t.common.copyFailed(String(e)))
       }
-    }, [value])
+    }, [t, value])
 
     return (
       <div
         className={cn(
-          'inline-flex items-center gap-1 rounded-md border border-border bg-raised pl-2 pr-1 h-7',
+          'inline-flex items-center gap-1.5 rounded-md border border-border bg-raised pl-3 pr-1.5 h-10 min-w-0',
           'focus-within:border-accent-dim focus-within:outline-2 focus-within:outline-accent transition-colors',
           wrapperClassName,
         )}
@@ -43,19 +45,23 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           type={revealed ? 'text' : 'password'}
           value={value}
           className={cn(
-            'flex-1 bg-transparent border-0 outline-none text-text-1 text-xs font-log min-w-0',
+            'flex-1 bg-transparent border-0 outline-none text-text-1 text-[13px] font-log min-w-0',
             className,
           )}
           {...rest}
         />
         <IconButton
-          title={revealed ? 'Hide' : 'Reveal'}
+          title={revealed ? t.common.hide : t.common.reveal}
           onClick={() => setRevealed((v) => !v)}
         >
-          {revealed ? <EyeOff size={12} strokeWidth={1.75} /> : <Eye size={12} strokeWidth={1.75} />}
+          {revealed ? (
+            <EyeOff size={12} strokeWidth={1.75} />
+          ) : (
+            <Eye size={12} strokeWidth={1.75} />
+          )}
         </IconButton>
         {copyable && (
-          <IconButton title="Copy" onClick={handleCopy}>
+          <IconButton title={t.common.copy} onClick={handleCopy}>
             {copied ? (
               <Check size={12} strokeWidth={2} className="text-run" />
             ) : (
@@ -64,7 +70,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           </IconButton>
         )}
         {onRegenerate && (
-          <IconButton title="Regenerate" onClick={() => void onRegenerate()}>
+          <IconButton title={t.common.regenerate} onClick={() => void onRegenerate()}>
             <RefreshCw size={12} strokeWidth={1.75} />
           </IconButton>
         )}
@@ -89,7 +95,7 @@ function IconButton({
       title={title}
       aria-label={title}
       onClick={onClick}
-      className="inline-flex items-center justify-center w-5 h-5 rounded text-text-3 hover:text-text-1 hover:bg-hover transition-colors"
+      className="inline-flex items-center justify-center w-9 h-9 rounded-md text-text-3 hover:text-text-1 hover:bg-hover transition-colors"
     >
       {children}
     </button>

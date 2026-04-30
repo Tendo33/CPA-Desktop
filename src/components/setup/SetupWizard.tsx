@@ -229,7 +229,7 @@ function Header({
           fontSize: 22,
           fontWeight: 600,
           color: 'var(--c-text-1)',
-          letterSpacing: '-0.025em',
+          letterSpacing: 0,
           textAlign: 'center',
         }}
       >
@@ -272,7 +272,7 @@ function Brand() {
           fontSize: 24,
           fontWeight: 700,
           color: 'var(--c-accent)',
-          letterSpacing: '-0.02em',
+          letterSpacing: 0,
         }}
       >
         C
@@ -317,11 +317,7 @@ function Stepper({
                     : active
                       ? 'var(--c-accent-bg)'
                       : 'var(--c-raised)',
-                  color: done
-                    ? 'var(--c-bg)'
-                    : active
-                      ? 'var(--c-accent)'
-                      : 'var(--c-text-3)',
+                  color: done ? 'var(--c-bg)' : active ? 'var(--c-accent)' : 'var(--c-text-3)',
                   border: active ? '1px solid var(--c-accent-dim)' : '1px solid var(--c-border)',
                   transition: 'all 200ms ease',
                 }}

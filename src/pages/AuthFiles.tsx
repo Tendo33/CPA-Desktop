@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Filter, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, Filter, RefreshCw, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 import {
   type AuthFileInfo,
@@ -72,6 +72,7 @@ export function AuthFilesPage() {
   const [exporting, setExporting] = useState(false)
   const [statusText, setStatusText] = useState<string>(t.authFiles.emptyInitial)
   const [statusTone, setStatusTone] = useState<'info' | 'success' | 'warn' | 'error'>('info')
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const createSession = async () => createAuthSession(password)
 
@@ -156,6 +157,16 @@ export function AuthFilesPage() {
     [items],
   )
 
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = []
+    if (type !== 'all') labels.push(`${t.authFiles.type}: ${type}`)
+    if (plan !== 'all') labels.push(`${t.authFiles.planLabel}: ${t.authFiles.plan[plan]}`)
+    if (statusFilter !== 'all') labels.push(`${t.authFiles.status}: ${statusFilter}`)
+    if (search.trim()) labels.push(`${t.authFiles.search}: ${search.trim()}`)
+    if (concurrency !== 5) labels.push(`${t.authFiles.concurrency}: ${concurrency}`)
+    return labels
+  }, [concurrency, plan, search, statusFilter, t, type])
+
   const refresh = async () => {
     if (loading || exporting) return
     if (!cpaRunning) {
@@ -198,8 +209,7 @@ export function AuthFilesPage() {
       setStatusTone('warn')
       return
     }
-    const target =
-      scope === 'selected' ? items.filter((it) => selected.has(it.id)) : filtered
+    const target = scope === 'selected' ? items.filter((it) => selected.has(it.id)) : filtered
     if (target.length === 0) {
       const msg = scope === 'selected' ? t.authFiles.nothingSelected : t.authFiles.nothingMatched
       toast.error(msg)
@@ -278,132 +288,158 @@ export function AuthFilesPage() {
 
   return (
     <div className="flex flex-col h-full bg-bg overflow-hidden">
-      <div className="flex flex-col gap-3 px-4 py-3 border-b border-border-sub bg-surface">
-        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+      <div className="flex flex-col gap-4 px-5 py-4 border-b border-border-sub bg-surface">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-[15px] font-semibold text-text-1 leading-tight">
+            <h1 className="text-[17px] font-semibold text-text-1 leading-tight">
               {t.authFiles.title}
             </h1>
-            <p className="text-[12px] text-text-3 leading-snug">{t.authFiles.subtitle}</p>
+            <p className="max-w-[68ch] text-[13px] text-text-3 leading-relaxed">
+              {t.authFiles.subtitle}
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={refresh} disabled={busy}>
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <Button onClick={refresh} disabled={busy}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               {loading ? t.authFiles.refreshing : t.authFiles.refresh}
             </Button>
           </div>
         </div>
 
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}
-        >
-          <Field label={t.authFiles.password} hint={t.authFiles.passwordHint}>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="off"
-              disabled={busy}
-            />
-          </Field>
-          <Field label={t.authFiles.concurrency}>
-            <Input
-              type="number"
-              min={1}
-              max={32}
-              value={concurrency}
-              onChange={(e) => setConcurrency(Math.max(1, Number(e.target.value) || 1))}
-              disabled={busy}
-            />
-          </Field>
-          <Field label={t.authFiles.type}>
-            <Select value={type} onChange={setType} disabled={busy}>
-              <option value="all">{t.authFiles.allTypes}</option>
-              {allTypes.length === 0 && type !== 'all' ? (
-                <option value={type}>{type}</option>
-              ) : null}
-              {allTypes.map((tp) => (
-                <option key={tp} value={tp}>
-                  {tp}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t.authFiles.planLabel}>
-            <Select value={plan} onChange={(v) => setPlan(v as PlanFilter)} disabled={busy}>
-              {PLAN_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {t.authFiles.plan[p]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t.authFiles.status}>
-            <Select value={statusFilter} onChange={setStatusFilter} disabled={busy}>
-              <option value="all">{t.authFiles.allStatuses}</option>
-              {allStatuses.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t.authFiles.search}>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t.authFiles.searchPlaceholder}
-              disabled={busy}
-            />
-          </Field>
+        <div className="auth-control-panel">
+          <div className="auth-credential-row">
+            <div className="auth-secret-field">
+              <Field label={t.authFiles.password} hint={t.authFiles.passwordHint}>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="off"
+                  disabled={busy}
+                />
+              </Field>
+            </div>
+            <div className="auth-filter-summary">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((v) => !v)}
+              >
+                <SlidersHorizontal size={14} />
+                {filtersOpen ? t.authFiles.hideFilters : t.authFiles.filters}
+              </Button>
+              <div className="auth-filter-chips" aria-label={t.authFiles.activeFilters}>
+                {activeFilterLabels.length > 0 ? (
+                  activeFilterLabels.map((label) => <FilterChip key={label}>{label}</FilterChip>)
+                ) : (
+                  <span className="text-[11px] text-text-3">{t.authFiles.noExtraFilters}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {filtersOpen && (
+            <div className="auth-filter-grid">
+              <Field label={t.authFiles.concurrency}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={concurrency}
+                  onChange={(e) => setConcurrency(Math.max(1, Number(e.target.value) || 1))}
+                  disabled={busy}
+                />
+              </Field>
+              <Field label={t.authFiles.type}>
+                <Select value={type} onChange={setType} disabled={busy}>
+                  <option value="all">{t.authFiles.allTypes}</option>
+                  {allTypes.length === 0 && type !== 'all' ? (
+                    <option value={type}>{type}</option>
+                  ) : null}
+                  {allTypes.map((tp) => (
+                    <option key={tp} value={tp}>
+                      {tp}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={t.authFiles.planLabel}>
+                <Select value={plan} onChange={(v) => setPlan(v as PlanFilter)} disabled={busy}>
+                  {PLAN_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {t.authFiles.plan[p]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={t.authFiles.status}>
+                <Select value={statusFilter} onChange={setStatusFilter} disabled={busy}>
+                  <option value="all">{t.authFiles.allStatuses}</option>
+                  {allStatuses.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={t.authFiles.search}>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t.authFiles.searchPlaceholder}
+                  disabled={busy}
+                />
+              </Field>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 text-[12px] text-text-2 flex-wrap">
-            <span className="font-semibold text-text-3 uppercase tracking-wider text-[10px]">
-              {t.authFiles.formatTitle}
-            </span>
-            <FormatToggle
-              label={t.authFiles.cpaFormat}
-              checked={exportCpa}
-              onChange={setExportCpa}
-              disabled={busy}
-            />
-            <FormatToggle
-              label={t.authFiles.sub2apiFormat}
-              checked={exportSub2api}
-              onChange={setExportSub2api}
-              disabled={busy}
-            />
+        {items.length > 0 && (
+          <div className="auth-export-panel">
+            <div className="flex items-center gap-3 text-[12px] text-text-2 flex-wrap">
+              <span className="font-semibold text-text-3 uppercase tracking-[0.08em] text-[11px]">
+                {t.authFiles.formatTitle}
+              </span>
+              <FormatToggle
+                label={t.authFiles.cpaFormat}
+                checked={exportCpa}
+                onChange={setExportCpa}
+                disabled={busy}
+              />
+              <FormatToggle
+                label={t.authFiles.sub2apiFormat}
+                checked={exportSub2api}
+                onChange={setExportSub2api}
+                disabled={busy}
+              />
+            </div>
+            <div className="auth-export-actions">
+              <Button
+                variant="ghost"
+                onClick={() => toggleAllVisible(true)}
+                disabled={busy || filtered.length === 0}
+              >
+                <Filter size={14} />
+                {t.authFiles.selectVisible}
+              </Button>
+              {selected.size > 0 && (
+                <Button variant="ghost" onClick={() => setSelected(new Set())} disabled={busy}>
+                  <Trash2 size={14} />
+                  {t.authFiles.clearSelected}
+                </Button>
+              )}
+              <Button onClick={() => doExport('all')} disabled={busy || filtered.length === 0}>
+                <Download size={14} />
+                {t.authFiles.exportAll}
+              </Button>
+              <Button onClick={() => doExport('selected')} disabled={busy || selected.size === 0}>
+                <Download size={14} />
+                {t.authFiles.exportSelected}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="ghost"
-              onClick={() => toggleAllVisible(true)}
-              disabled={busy || filtered.length === 0}
-            >
-              <Filter size={13} />
-              {t.authFiles.selectVisible}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setSelected(new Set())}
-              disabled={busy || selected.size === 0}
-            >
-              <Trash2 size={13} />
-              {t.authFiles.clearSelected}
-            </Button>
-            <Button onClick={() => doExport('all')} disabled={busy || filtered.length === 0}>
-              <Download size={13} />
-              {t.authFiles.exportAll}
-            </Button>
-            <Button onClick={() => doExport('selected')} disabled={busy || selected.size === 0}>
-              <Download size={13} />
-              {t.authFiles.exportSelected}
-            </Button>
-          </div>
-        </div>
+        )}
 
         <div className="flex items-center gap-3 text-[11px] text-text-3 flex-wrap">
           <span
@@ -427,13 +463,14 @@ export function AuthFilesPage() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-[12px]">
+        <table className="min-w-[760px] w-full border-collapse text-[13px]">
           <thead>
             <tr className="bg-surface text-text-3 sticky top-0 z-10">
               <th className="w-10 px-2 py-2 border-b border-border-sub text-center">
                 <input
                   type="checkbox"
-                  aria-label="toggle all visible"
+                  aria-label={t.authFiles.toggleAllVisible}
+                  className="checkbox-control"
                   checked={masterChecked}
                   ref={(el) => {
                     if (el) el.indeterminate = masterIndeterminate
@@ -477,10 +514,11 @@ export function AuthFilesPage() {
                     <td className="px-2 py-1.5 border-b border-border-sub text-center">
                       <input
                         type="checkbox"
+                        className="checkbox-control"
                         checked={checked}
                         onChange={(e) => toggleOne(it.id, e.target.checked)}
                         disabled={busy}
-                        aria-label={`select ${it.name}`}
+                        aria-label={t.authFiles.selectFile(it.name)}
                       />
                     </td>
                     <td
@@ -529,12 +567,12 @@ function Field({
   children: React.ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-text-3">
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-3">
         {label}
       </span>
       {children}
-      {hint ? <span className="text-[10px] text-text-3">{hint}</span> : null}
+      {hint ? <span className="text-[11px] leading-snug text-text-3">{hint}</span> : null}
     </label>
   )
 }
@@ -555,7 +593,7 @@ function Select({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="h-7 px-2 rounded-md border border-border bg-raised text-text-1 text-xs focus:outline-none focus:border-accent-dim disabled:opacity-50"
+      className="h-10 min-w-0 px-3 rounded-md border border-border bg-raised text-text-1 text-[13px] focus:outline-none focus:border-accent-dim disabled:opacity-50"
     >
       {children}
     </select>
@@ -576,7 +614,7 @@ function FormatToggle({
   return (
     <label
       className={
-        'inline-flex items-center gap-1.5 px-2 h-6 rounded-full border text-[11px] cursor-pointer transition-colors ' +
+        'inline-flex items-center gap-2 px-3 h-9 rounded-full border text-[12px] cursor-pointer transition-colors ' +
         (checked
           ? 'bg-accent-bg text-accent border-accent-dim'
           : 'bg-raised text-text-3 border-border')
@@ -587,10 +625,18 @@ function FormatToggle({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="m-0"
+        className="checkbox-control m-0"
       />
       {label}
     </label>
+  )
+}
+
+function FilterChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-md bg-raised px-2 py-0.5 text-[11px] text-text-2">
+      {children}
+    </span>
   )
 }
 

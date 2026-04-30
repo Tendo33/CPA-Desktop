@@ -21,7 +21,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
       max={max}
       onChange={(e) => onChange(Number(e.target.value))}
       className={cn(
-        'h-7 w-20 px-2 rounded-md border border-border bg-raised text-text-1 text-xs text-right tabular-nums',
+        'h-10 w-24 min-w-0 px-3 rounded-md border border-border bg-raised text-text-1 text-[13px] text-right tabular-nums',
         'focus:outline-none focus:border-accent-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent transition-colors',
         className,
       )}

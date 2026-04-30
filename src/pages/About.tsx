@@ -218,7 +218,7 @@ export function AboutPage() {
                 fontSize: 20,
                 fontWeight: 600,
                 color: 'var(--c-text-1)',
-                letterSpacing: '-0.02em',
+                letterSpacing: 0,
               }}
             >
               CPA Desktop
@@ -303,9 +303,11 @@ export function AboutPage() {
                   className="progress-shimmer"
                   style={{
                     height: '100%',
-                    width: `${pct}%`,
+                    width: '100%',
                     borderRadius: 999,
-                    transition: 'width 200ms ease',
+                    transform: `scaleX(${pct / 100})`,
+                    transformOrigin: 'left center',
+                    transition: 'transform 200ms ease',
                   }}
                 />
               </div>
@@ -337,11 +339,7 @@ export function AboutPage() {
           </div>
         </div>
 
-        <Modal
-          open={brewOpen}
-          onClose={() => setBrewOpen(false)}
-          title="brew upgrade cliproxyapi"
-        >
+        <Modal open={brewOpen} onClose={() => setBrewOpen(false)} title="brew upgrade cliproxyapi">
           <pre
             className="max-h-[320px] min-h-[120px] overflow-auto rounded bg-raised p-2 text-[11px] text-text-2 whitespace-pre-wrap break-all"
             style={{ fontFamily: 'ui-monospace, monospace' }}
@@ -381,9 +379,7 @@ export function AboutPage() {
               variant="ghost"
               size="sm"
               onClick={() =>
-                navigator.clipboard
-                  .writeText((external?.commands ?? []).join('\n'))
-                  .catch(() => {})
+                navigator.clipboard.writeText((external?.commands ?? []).join('\n')).catch(() => {})
               }
             >
               {t.installSource.copy}

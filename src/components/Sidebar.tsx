@@ -49,15 +49,16 @@ export function Sidebar({ current, onChange }: Props) {
     )
   const themeTitle =
     theme === 'light'
-      ? 'Light theme — click for Dark'
+      ? t.sidebar.themeLightTitle
       : theme === 'dark'
-        ? 'Dark theme — click for System'
-        : 'System theme — click for Light'
+        ? t.sidebar.themeDarkTitle
+        : t.sidebar.themeSystemTitle
+  const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
 
   return (
     <nav
       style={{
-        width: 52,
+        width: 56,
         background: 'var(--c-surface)',
         borderRight: '1px solid var(--c-border-sub)',
         display: 'flex',
@@ -148,7 +149,7 @@ export function Sidebar({ current, onChange }: Props) {
         {/* Theme toggle: light → dark → system */}
         <SidebarIconBtn
           title={themeTitle}
-          ariaLabel={`Switch to ${theme === 'light' ? 'Dark' : theme === 'dark' ? 'System' : 'Light'} Theme (Currently ${theme})`}
+          ariaLabel={t.sidebar.switchThemeLabel(nextTheme, theme)}
           onClick={toggleTheme}
         >
           {themeIcon}
@@ -156,15 +157,11 @@ export function Sidebar({ current, onChange }: Props) {
 
         {/* Language toggle: EN / 中 */}
         <SidebarIconBtn
-          title={lang === 'en' ? '切换为中文' : 'Switch to English'}
-          ariaLabel={
-            lang === 'en'
-              ? 'Switch to Chinese (Currently English)'
-              : 'Switch to English (Currently Chinese)'
-          }
+          title={lang === 'en' ? t.sidebar.switchToChinese : t.sidebar.switchToEnglish}
+          ariaLabel={lang === 'en' ? t.sidebar.switchToChinese : t.sidebar.switchToEnglish}
           onClick={toggleLang}
         >
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0, lineHeight: 1 }}>
             {lang === 'en' ? '中' : 'EN'}
           </span>
         </SidebarIconBtn>
@@ -193,8 +190,8 @@ function SidebarIconBtn({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 36,
-        height: 30,
+        width: 40,
+        height: 40,
         borderRadius: 6,
         border: 'none',
         background: 'transparent',

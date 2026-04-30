@@ -13,6 +13,6 @@ describe('Button', () => {
   })
   it('applies sm size', () => {
     render(<Button size="sm">small</Button>)
-    expect(screen.getByRole('button').className).toMatch(/h-6/)
+    expect(screen.getByRole('button').className).toMatch(/h-9/)
   })
 })

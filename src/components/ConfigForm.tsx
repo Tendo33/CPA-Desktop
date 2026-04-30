@@ -60,12 +60,7 @@ function notifyDirty(state: DirtyState) {
   window.dispatchEvent(new CustomEvent('cpa-config-dirty', { detail: state }))
 }
 
-const RESTART_REQUIRED_KEYS = new Set<keyof FieldState>([
-  'port',
-  'host',
-  'secretKey',
-  'apiKeys',
-])
+const RESTART_REQUIRED_KEYS = new Set<keyof FieldState>(['port', 'host', 'secretKey', 'apiKeys'])
 
 export function ConfigForm() {
   const t = useT()
@@ -109,7 +104,7 @@ export function ConfigForm() {
     pendingToast.current = setTimeout(() => {
       pendingToast.current = null
       if (writesInFlight.current === 0) {
-        toast.success('Saved')
+        toast.success(t.configForm.saved)
       }
     }, 700)
   }
@@ -142,54 +137,67 @@ export function ConfigForm() {
     try {
       const k = await generateSecret()
       update('secretKey', k)
-      toast.success('New secret generated. Copy it before you leave this page.')
+      toast.success(t.configForm.newSecretGenerated)
     } catch (e) {
-      toast.error(`Generate failed: ${String(e)}`)
+      toast.error(t.common.generateFailed(String(e)))
     }
   }
 
   if (!loaded) {
-    return <div className="text-xs text-text-3 px-3 py-4">Loading…</div>
+    return <div className="text-xs text-text-3 px-4 py-5">{t.configForm.loading}</div>
   }
 
   return (
     <div>
-      <Row first label="Port" hint="CPA listening port (restart required)">
+      <Row first label={t.configForm.port} hint={t.configForm.portHint}>
         <NumberInput
+          aria-label={t.configForm.port}
           value={fields.port}
           min={1024}
           max={65535}
           onChange={(n) => update('port', n)}
         />
       </Row>
-      <Row label="Host" hint='Empty = bind all interfaces. Use "127.0.0.1" for localhost only.'>
+      <Row label={t.configForm.host} hint={t.configForm.hostHint}>
         <Input
+          aria-label={t.configForm.host}
           value={fields.host}
           onChange={(e) => update('host', e.target.value)}
-          placeholder="(all interfaces)"
-          className="w-48"
+          placeholder={t.configForm.hostPlaceholder}
+          className="w-56"
         />
       </Row>
-      <Row label="Debug logging" hint="Verbose CPA logs (restart required)">
-        <Toggle checked={fields.debug} onChange={(v) => update('debug', v)} />
+      <Row label={t.configForm.debug} hint={t.configForm.debugHint}>
+        <Toggle
+          checked={fields.debug}
+          onChange={(v) => update('debug', v)}
+          ariaLabel={t.configForm.debug}
+        />
       </Row>
       <Row
-        label="Management secret key"
-        hint="Required to access /v0/management. Empty disables the management API entirely."
+        label={t.configForm.secretKey}
+        hint={t.configForm.secretKeyHint}
+        controlClassName="w-full sm:w-auto"
       >
         <PasswordInput
+          aria-label={t.configForm.secretKey}
           value={fields.secretKey}
           onChange={(e) => update('secretKey', e.target.value)}
           onRegenerate={handleRegenerateSecret}
-          wrapperClassName="w-72"
-          placeholder="(disabled)"
+          wrapperClassName="w-full sm:w-80"
+          placeholder={t.configForm.secretPlaceholder}
         />
       </Row>
-      <Row label="Client API keys" hint="Bearer tokens callers send to /v1/* (restart required)">
+      <Row
+        label={t.configForm.clientApiKeys}
+        hint={t.configForm.clientApiKeysHint}
+        controlClassName="w-full sm:w-auto"
+      >
         <ApiKeyList value={fields.apiKeys} onChange={(v) => update('apiKeys', v)} />
       </Row>
-      <Row label="Request retry" hint="Retries on 403/408/5xx upstream responses">
+      <Row label={t.configForm.requestRetry} hint={t.configForm.requestRetryHint}>
         <NumberInput
+          aria-label={t.configForm.requestRetry}
           value={fields.requestRetry}
           min={0}
           max={10}

@@ -31,7 +31,7 @@ export function StatusBar() {
       listen<InstallSourceInfo>('install:source-changed', (e) => setInfo(e.payload)),
       listen<AutoRestartEvent>('cpa:auto-restart', (e) => {
         const { attempt, max, delaySecs, reason } = e.payload
-        setRestartHint(`auto-restart ${attempt}/${max} in ${delaySecs}s — ${reason}`)
+        setRestartHint(t.status.autoRestart(attempt, max, delaySecs, reason))
         // Clear after a short while so the bar doesn't get stuck if
         // the next attempt succeeds silently.
         setTimeout(() => setRestartHint(null), Math.max(8000, delaySecs * 1000 + 4000))
@@ -40,7 +40,7 @@ export function StatusBar() {
     return () => {
       subs.forEach((p) => p.then((f) => f()).catch(() => {}))
     }
-  }, [])
+  }, [t])
   const running = isRunning(status)
   const starting = isStarting(status)
   const errorMsg = errorOf(status)
@@ -162,7 +162,8 @@ export function StatusBar() {
           fontSize: 11,
           fontWeight: 500,
           fontFamily: 'inherit',
-          padding: '1px 8px',
+          minHeight: 28,
+          padding: '3px 12px',
           borderRadius: 4,
           border: '1px solid',
           cursor: starting ? 'default' : 'pointer',
@@ -184,7 +185,7 @@ export function StatusBar() {
           if (running) {
             e.currentTarget.style.background = 'var(--c-err)'
             e.currentTarget.style.borderColor = 'var(--c-err)'
-            e.currentTarget.style.color = 'white'
+            e.currentTarget.style.color = 'var(--c-bg)'
           } else {
             e.currentTarget.style.background = 'var(--c-accent)'
             e.currentTarget.style.borderColor = 'var(--c-accent)'

@@ -15,7 +15,7 @@ import {
   type AppSettings,
 } from '@/lib/tauri'
 import { useCpaStore } from '@/stores/cpa'
-import { FolderOpen, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderOpen, RefreshCw } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 import { Button, Input, NumberInput, Row, Section, Toggle, Tabs } from '@/components/ui'
 import { ConfigForm } from '@/components/ConfigForm'
@@ -40,6 +40,7 @@ export function SettingsPage() {
   const [updateMsg, setUpdateMsg] = useState('')
   const [configTab, setConfigTab] = useState<'form' | 'yaml'>('form')
   const [needsRestart, setNeedsRestart] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const theme = useSettingsStore((s) => s.theme)
 
   useEffect(() => {
@@ -183,11 +184,8 @@ export function SettingsPage() {
   const portMismatch = yamlPort !== null && yamlPort !== settings.port
 
   return (
-    <div
-      className="selectable"
-      style={{ height: '100%', overflowY: 'auto', background: 'var(--c-bg)', padding: '24px 28px' }}
-    >
-      <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 28 }}>
+    <div className="selectable app-scroll-page">
+      <div className="settings-shell">
         {/* ── Restart-required banner ────────────────────────────── */}
         {needsRestart && (
           <div
@@ -209,11 +207,7 @@ export function SettingsPage() {
               <Button size="sm" onClick={handleRestartCpa}>
                 {t.settings.restartNow}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setNeedsRestart(false)}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setNeedsRestart(false)}>
                 {t.settings.dismiss}
               </Button>
             </div>
@@ -221,176 +215,223 @@ export function SettingsPage() {
         )}
 
         {/* ── Install source ─────────────────────────────────────── */}
-        <InstallSourceCard />
+        <InstallSourceCard defaultOpen={false} />
 
-        {/* ── Application ─────────────────────────────────────────── */}
-        <Section title={t.settings.application}>
-          <Row
-            first
-            label={t.settings.cpaPort}
-            hint={portMismatch ? t.settings.portMismatch(yamlPort!) : t.settings.portHint}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {portMismatch && (
-                <span style={{ fontSize: 10, color: 'var(--c-start)', fontWeight: 500 }}>
-                  {t.settings.mismatch}
-                </span>
-              )}
-              <NumberInput
-                value={settings.port}
-                min={1024}
-                max={65535}
-                onChange={(n) => updateSetting({ port: n })}
-              />
-            </div>
-          </Row>
+        <div className="settings-grid">
+          <div className="settings-stack">
+            {/* ── Application ─────────────────────────────────────────── */}
+            <Section title={t.settings.application}>
+              <Row
+                first
+                label={t.settings.cpaPort}
+                hint={portMismatch ? t.settings.portMismatch(yamlPort!) : t.settings.portHint}
+              >
+                <div className="flex items-center justify-end gap-2">
+                  {portMismatch && (
+                    <span className="text-[11px] text-start font-semibold whitespace-nowrap">
+                      {t.settings.mismatch}
+                    </span>
+                  )}
+                  <NumberInput
+                    aria-label={t.settings.cpaPort}
+                    value={settings.port}
+                    min={1024}
+                    max={65535}
+                    onChange={(n) => updateSetting({ port: n })}
+                  />
+                </div>
+              </Row>
 
-          <Row label={t.settings.autoStartCpa} hint={t.settings.autoStartHint}>
-            <Toggle
-              checked={settings.autoStart}
-              onChange={(v) => updateSetting({ autoStart: v }, { immediate: true })}
-            />
-          </Row>
+              <Row label={t.settings.autoStartCpa} hint={t.settings.autoStartHint}>
+                <Toggle
+                  checked={settings.autoStart}
+                  onChange={(v) => updateSetting({ autoStart: v }, { immediate: true })}
+                  ariaLabel={t.settings.autoStartCpa}
+                />
+              </Row>
 
-          <Row label={t.settings.launchOnLogin} hint={t.settings.launchOnLoginHint}>
-            <Toggle checked={autolaunch} onChange={handleAutolaunchChange} />
-          </Row>
+              <Row label={t.settings.launchOnLogin} hint={t.settings.launchOnLoginHint}>
+                <Toggle
+                  checked={autolaunch}
+                  onChange={handleAutolaunchChange}
+                  ariaLabel={t.settings.launchOnLogin}
+                />
+              </Row>
 
-          <Row label={t.settings.checkAppUpdate} hint={updateMsg || t.settings.checkAppUpdateHint}>
-            <Button variant="ghost" size="sm" onClick={onCheckUpdate}>
-              {t.settings.checkNow}
-            </Button>
-          </Row>
-
-          <Row label={t.settings.autoCheck} hint={t.settings.autoCheckHint}>
-            <Toggle
-              checked={settings.autoCheckAppUpdates ?? false}
-              onChange={(v) => updateSetting({ autoCheckAppUpdates: v }, { immediate: true })}
-            />
-          </Row>
-
-          <Row label={t.settings.mirrors} hint={t.settings.mirrorsHint}>
-            <Input
-              value={(settings.mirrors ?? []).join(', ')}
-              onChange={(e) =>
-                updateSetting({
-                  mirrors: e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              className="w-72"
-            />
-          </Row>
-        </Section>
-
-        {/* ── Advanced (process-management knobs) ─────────────────── */}
-        <Section title={t.settings.advanced}>
-          <Row first label={t.settings.startTimeout} hint={t.settings.startTimeoutHint}>
-            <NumberInput
-              value={settings.startTimeoutSecs ?? 60}
-              min={5}
-              max={600}
-              onChange={(n) => updateSetting({ startTimeoutSecs: n })}
-            />
-          </Row>
-          <Row label={t.settings.autoRestart} hint={t.settings.autoRestartHint}>
-            <Toggle
-              checked={settings.autoRestart ?? true}
-              onChange={(v) => updateSetting({ autoRestart: v }, { immediate: true })}
-            />
-          </Row>
-          <Row label={t.settings.healthPath} hint={t.settings.healthPathHint}>
-            <Input
-              value={settings.healthPath ?? '/health'}
-              onChange={(e) => updateSetting({ healthPath: e.target.value })}
-              className="w-48"
-            />
-          </Row>
-        </Section>
-
-        {/* ── Actions ─────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="ghost" onClick={openDataDir}>
-            <FolderOpen size={12} strokeWidth={1.75} />
-            {t.settings.dataFolder}
-          </Button>
-          <Button variant="ghost" onClick={handleRestartCpa}>
-            <RefreshCw size={12} strokeWidth={1.75} />
-            {t.settings.restartCpa}
-          </Button>
-          {msg && <span className="text-xs font-medium text-run">{msg}</span>}
-        </div>
-
-        {/* ── config.yaml ─────────────────────────────────────────── */}
-        <Section
-          title={t.settings.configYaml}
-          action={
-            <div className="flex gap-1 items-center">
-              <Tabs
-                items={[
-                  { id: 'form', label: 'FORM' },
-                  { id: 'yaml', label: 'YAML' },
-                ]}
-                active={configTab}
-                onChange={setConfigTab}
-                tabClassName={(active) =>
-                  cn(
-                    'uppercase tracking-wider',
-                    active
-                      ? 'bg-hover text-text-1 font-semibold'
-                      : 'bg-transparent text-text-3 hover:text-text-2',
-                  )
-                }
-              />
-              {configTab === 'yaml' && (
-                <Button onClick={handleSaveYaml} size="sm">
-                  {t.settings.saveApply}
+              <Row
+                label={t.settings.checkAppUpdate}
+                hint={updateMsg || t.settings.checkAppUpdateHint}
+              >
+                <Button variant="ghost" size="sm" onClick={onCheckUpdate}>
+                  {t.settings.checkNow}
                 </Button>
-              )}
-            </div>
-          }
-        >
-          {configTab === 'form' ? (
-            <ConfigForm />
-          ) : (
-            <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
-              {yamlError && (
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    borderBottom: '1px solid var(--c-err-border)',
-                    background: 'var(--c-err-bg)',
-                    fontSize: 11,
-                    color: 'var(--c-err)',
-                  }}
+              </Row>
+
+              <Row label={t.settings.autoCheck} hint={t.settings.autoCheckHint}>
+                <Toggle
+                  checked={settings.autoCheckAppUpdates ?? false}
+                  onChange={(v) => updateSetting({ autoCheckAppUpdates: v }, { immediate: true })}
+                  ariaLabel={t.settings.autoCheck}
+                />
+              </Row>
+            </Section>
+
+            {/* ── Advanced (process-management knobs) ─────────────────── */}
+            <Section
+              title={t.settings.advanced}
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={advancedOpen}
+                  onClick={() => setAdvancedOpen((v) => !v)}
                 >
-                  {yamlError}
+                  {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {advancedOpen ? t.settings.hideDetails : t.settings.showDetails}
+                </Button>
+              }
+            >
+              {advancedOpen ? (
+                <>
+                  <Row first label={t.settings.startTimeout} hint={t.settings.startTimeoutHint}>
+                    <NumberInput
+                      aria-label={t.settings.startTimeout}
+                      value={settings.startTimeoutSecs ?? 60}
+                      min={5}
+                      max={600}
+                      onChange={(n) => updateSetting({ startTimeoutSecs: n })}
+                    />
+                  </Row>
+                  <Row label={t.settings.autoRestart} hint={t.settings.autoRestartHint}>
+                    <Toggle
+                      checked={settings.autoRestart ?? true}
+                      onChange={(v) => updateSetting({ autoRestart: v }, { immediate: true })}
+                      ariaLabel={t.settings.autoRestart}
+                    />
+                  </Row>
+                  <Row
+                    label={t.settings.healthPath}
+                    hint={t.settings.healthPathHint}
+                    controlClassName="w-full sm:w-auto"
+                  >
+                    <Input
+                      aria-label={t.settings.healthPath}
+                      value={settings.healthPath ?? '/health'}
+                      onChange={(e) => updateSetting({ healthPath: e.target.value })}
+                      className="w-full sm:w-56"
+                    />
+                  </Row>
+                  <Row
+                    label={t.settings.mirrors}
+                    hint={t.settings.mirrorsHint}
+                    controlClassName="w-full sm:w-auto"
+                  >
+                    <Input
+                      aria-label={t.settings.mirrors}
+                      value={(settings.mirrors ?? []).join(', ')}
+                      onChange={(e) =>
+                        updateSetting({
+                          mirrors: e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                      className="w-full sm:w-80"
+                    />
+                  </Row>
+                </>
+              ) : (
+                <div className="settings-collapsed-summary">{t.settings.advancedSummary}</div>
+              )}
+            </Section>
+
+            {/* ── Actions ─────────────────────────────────────────────── */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="ghost" onClick={openDataDir}>
+                <FolderOpen size={14} strokeWidth={1.75} />
+                {t.settings.dataFolder}
+              </Button>
+              <Button variant="ghost" onClick={handleRestartCpa}>
+                <RefreshCw size={14} strokeWidth={1.75} />
+                {t.settings.restartCpa}
+              </Button>
+              {msg && <span className="text-xs font-medium text-run">{msg}</span>}
+            </div>
+          </div>
+
+          <div className="settings-stack">
+            {/* ── config.yaml ─────────────────────────────────────────── */}
+            <Section
+              title={t.settings.configYaml}
+              action={
+                <div className="flex gap-2 items-center">
+                  <Tabs
+                    items={[
+                      { id: 'form', label: t.settings.configFormTab },
+                      { id: 'yaml', label: t.settings.yamlTab },
+                    ]}
+                    active={configTab}
+                    onChange={setConfigTab}
+                    tabClassName={(active) =>
+                      cn(
+                        active
+                          ? 'bg-hover text-text-1 font-semibold'
+                          : 'bg-transparent text-text-3 hover:text-text-2',
+                      )
+                    }
+                  />
+                  {configTab === 'yaml' && (
+                    <Button onClick={handleSaveYaml} size="sm">
+                      {t.settings.saveApply}
+                    </Button>
+                  )}
+                </div>
+              }
+            >
+              {configTab === 'form' ? (
+                <ConfigForm />
+              ) : (
+                <div style={{ background: 'var(--c-surface)', padding: '2px 0' }}>
+                  {yamlError && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderBottom: '1px solid var(--c-err-border)',
+                        background: 'var(--c-err-bg)',
+                        fontSize: 12,
+                        color: 'var(--c-err)',
+                      }}
+                    >
+                      {yamlError}
+                    </div>
+                  )}
+                  <Suspense
+                    fallback={
+                      <div className="text-xs text-text-3 px-4 py-5">{t.common.loading}</div>
+                    }
+                  >
+                    <MonacoEditor
+                      height={380}
+                      language="yaml"
+                      theme={theme === 'light' ? 'vs' : 'vs-dark'}
+                      value={yaml}
+                      onChange={(v) => setYaml(v ?? '')}
+                      options={{
+                        fontSize: 13,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        tabSize: 2,
+                      }}
+                    />
+                  </Suspense>
                 </div>
               )}
-              <Suspense
-                fallback={<div className="text-xs text-text-3 px-3 py-4">Loading editor…</div>}
-              >
-                <MonacoEditor
-                  height={320}
-                  language="yaml"
-                  theme={theme === 'light' ? 'vs' : 'vs-dark'}
-                  value={yaml}
-                  onChange={(v) => setYaml(v ?? '')}
-                  options={{
-                    fontSize: 12,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    tabSize: 2,
-                  }}
-                />
-              </Suspense>
-            </div>
-          )}
-        </Section>
+            </Section>
 
-        <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{t.settings.restartNote}</p>
+            <p className="text-[12px] leading-relaxed text-text-3">{t.settings.restartNote}</p>
+          </div>
+        </div>
       </div>
     </div>
   )

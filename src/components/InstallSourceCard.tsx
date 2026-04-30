@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   detectInstallSources,
   externalUpdateInstructions,
@@ -22,7 +23,11 @@ function kindTone(s: InstallSource): 'accent' | 'run' | 'neutral' {
   return 'neutral'
 }
 
-export function InstallSourceCard() {
+interface InstallSourceCardProps {
+  defaultOpen?: boolean
+}
+
+export function InstallSourceCard({ defaultOpen = true }: InstallSourceCardProps = {}) {
   const t = useT()
   const kindLabel = (s: InstallSource): string => t.installSource.kind[s.kind]
   const [info, setInfo] = useState<InstallSourceInfo | null>(null)
@@ -34,6 +39,7 @@ export function InstallSourceCard() {
   const [brewLog, setBrewLog] = useState('')
   const [externalOpen, setExternalOpen] = useState(false)
   const [external, setExternal] = useState<ExternalUpdateInstructions | null>(null)
+  const [open, setOpen] = useState(defaultOpen)
 
   const refresh = () => {
     getInstallSourceInfo()
@@ -119,84 +125,94 @@ export function InstallSourceCard() {
     <Section
       title={t.installSource.title}
       action={
-        <Button variant="ghost" size="sm" onClick={handleRedetect} disabled={busy}>
-          {t.installSource.redetect}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleRedetect} disabled={busy}>
+            {t.installSource.redetect}
+          </Button>
+          <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {open ? t.settings.hideDetails : t.settings.showDetails}
+          </Button>
+        </div>
       }
     >
       <Row first label={t.installSource.currentLabel} hint={t.installSource.currentHint}>
         <Pill tone={kindTone(current)}>{kindLabel(current)}</Pill>
       </Row>
 
-      <Row label={t.installSource.binary} hint={info.paths.binary}>
-        <span />
-      </Row>
-      <Row label={t.installSource.config} hint={info.paths.config}>
-        <span />
-      </Row>
-      <Row label={t.installSource.workingDir} hint={info.paths.workingDir}>
-        <span />
-      </Row>
+      {open && (
+        <>
+          <Row label={t.installSource.binary} hint={info.paths.binary}>
+            <span />
+          </Row>
+          <Row label={t.installSource.config} hint={info.paths.config}>
+            <span />
+          </Row>
+          <Row label={t.installSource.workingDir} hint={info.paths.workingDir}>
+            <span />
+          </Row>
 
-      {info.validationErrors.length > 0 && (
-        <Row label={t.installSource.validation} hint={info.validationErrors.join('; ')}>
-          <Pill tone="err">!</Pill>
-        </Row>
-      )}
-
-      {/* Switch options */}
-      <Row label={t.installSource.switchTo} hint={t.installSource.switchHint}>
-        <div className="flex gap-2 flex-wrap justify-end">
-          <Button
-            size="sm"
-            variant={current.kind === 'managed' ? 'primary' : 'ghost'}
-            disabled={busy || current.kind === 'managed'}
-            onClick={() => handleSwitch({ kind: 'managed' })}
-          >
-            {t.installSource.kind.managed}
-          </Button>
-          {detection?.homebrew && (
-            <Button
-              size="sm"
-              variant={current.kind === 'homebrew' ? 'primary' : 'ghost'}
-              disabled={busy || current.kind === 'homebrew'}
-              onClick={() => handleSwitch(detection.homebrew!.source)}
-              title={detection.homebrew.note ?? undefined}
-            >
-              {t.installSource.kind.homebrew}
-            </Button>
+          {info.validationErrors.length > 0 && (
+            <Row label={t.installSource.validation} hint={info.validationErrors.join('; ')}>
+              <Pill tone="err">!</Pill>
+            </Row>
           )}
-          {detection?.systemPath && (
-            <Button
-              size="sm"
-              variant={current.kind === 'systemPath' ? 'primary' : 'ghost'}
-              disabled={busy || current.kind === 'systemPath'}
-              onClick={() => handleSwitch(detection.systemPath!.source)}
-              title={detection.systemPath.note ?? undefined}
-            >
-              {t.installSource.kind.systemPath}
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" onClick={() => setCustomOpen(true)}>
-            {`${t.installSource.kind.custom}…`}
-          </Button>
-        </div>
-      </Row>
 
-      {/* Update action */}
-      {info.strategy === 'brewUpgrade' && (
-        <Row label={t.installSource.updateAction} hint={t.installSource.brewHint}>
-          <Button size="sm" onClick={handleBrewUpgrade}>
-            {t.installSource.brewUpgrade}
-          </Button>
-        </Row>
-      )}
-      {info.strategy === 'externalNotice' && (
-        <Row label={t.installSource.updateAction} hint={t.installSource.externalHint}>
-          <Button size="sm" variant="ghost" onClick={handleShowExternal}>
-            {t.installSource.showInstructions}
-          </Button>
-        </Row>
+          {/* Switch options */}
+          <Row label={t.installSource.switchTo} hint={t.installSource.switchHint}>
+            <div className="flex gap-2 flex-wrap justify-end">
+              <Button
+                size="sm"
+                variant={current.kind === 'managed' ? 'primary' : 'ghost'}
+                disabled={busy || current.kind === 'managed'}
+                onClick={() => handleSwitch({ kind: 'managed' })}
+              >
+                {t.installSource.kind.managed}
+              </Button>
+              {detection?.homebrew && (
+                <Button
+                  size="sm"
+                  variant={current.kind === 'homebrew' ? 'primary' : 'ghost'}
+                  disabled={busy || current.kind === 'homebrew'}
+                  onClick={() => handleSwitch(detection.homebrew!.source)}
+                  title={detection.homebrew.note ?? undefined}
+                >
+                  {t.installSource.kind.homebrew}
+                </Button>
+              )}
+              {detection?.systemPath && (
+                <Button
+                  size="sm"
+                  variant={current.kind === 'systemPath' ? 'primary' : 'ghost'}
+                  disabled={busy || current.kind === 'systemPath'}
+                  onClick={() => handleSwitch(detection.systemPath!.source)}
+                  title={detection.systemPath.note ?? undefined}
+                >
+                  {t.installSource.kind.systemPath}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setCustomOpen(true)}>
+                {`${t.installSource.kind.custom}…`}
+              </Button>
+            </div>
+          </Row>
+
+          {/* Update action */}
+          {info.strategy === 'brewUpgrade' && (
+            <Row label={t.installSource.updateAction} hint={t.installSource.brewHint}>
+              <Button size="sm" onClick={handleBrewUpgrade}>
+                {t.installSource.brewUpgrade}
+              </Button>
+            </Row>
+          )}
+          {info.strategy === 'externalNotice' && (
+            <Row label={t.installSource.updateAction} hint={t.installSource.externalHint}>
+              <Button size="sm" variant="ghost" onClick={handleShowExternal}>
+                {t.installSource.showInstructions}
+              </Button>
+            </Row>
+          )}
+        </>
       )}
 
       {msg && (
@@ -254,9 +270,7 @@ export function InstallSourceCard() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              navigator.clipboard
-                .writeText((external?.commands ?? []).join('\n'))
-                .catch(() => {})
+              navigator.clipboard.writeText((external?.commands ?? []).join('\n')).catch(() => {})
             }}
           >
             {t.installSource.copy}

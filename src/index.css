@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=optional');
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500&display=optional');
 @import 'tailwindcss';
 
 /* ─── Tailwind v4 theme bridge ─────────────────────────────────────────── */
@@ -41,7 +41,7 @@
   /* Text */
   --c-text-1: oklch(93% 0.006 255);
   --c-text-2: oklch(64% 0.009 255);
-  --c-text-3: oklch(48% 0.008 255);
+  --c-text-3: oklch(58% 0.008 255);
 
   /* Status */
   --c-run: oklch(72% 0.19 145);
@@ -52,13 +52,13 @@
   --c-err-border: oklch(28% 0.08 22);
 
   font-family:
-    'DM Sans',
+    'Atkinson Hyperlegible',
     system-ui,
     -apple-system,
     'Segoe UI Variable Display',
     'Segoe UI',
     sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -78,14 +78,14 @@
   --c-border-sub: oklch(90% 0.005 255);
 
   /* Amber accent (slightly deeper for light bg contrast) */
-  --c-accent: oklch(58% 0.165 58);
-  --c-accent-dim: oklch(65% 0.13 58);
+  --c-accent: oklch(50% 0.16 58);
+  --c-accent-dim: oklch(56% 0.13 58);
   --c-accent-bg: oklch(95% 0.032 80);
 
   /* Text */
   --c-text-1: oklch(14% 0.008 255);
   --c-text-2: oklch(38% 0.009 255);
-  --c-text-3: oklch(60% 0.007 255);
+  --c-text-3: oklch(46% 0.007 255);
 
   /* Status */
   --c-run: oklch(50% 0.19 145);
@@ -197,7 +197,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
+  height: 40px;
   width: 100%;
   border-radius: 6px;
   position: relative;
@@ -231,8 +231,8 @@ body {
 /* ─── Toggle Switch ──────────────────────────────────────────────────────── */
 .toggle {
   position: relative;
-  width: 30px;
-  height: 17px;
+  width: 46px;
+  height: 28px;
   border-radius: 999px;
   background: var(--c-raised);
   border: 1px solid var(--c-border);
@@ -260,10 +260,10 @@ body {
 }
 .toggle-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 11px;
-  height: 11px;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--c-text-3);
   transition:
@@ -272,7 +272,7 @@ body {
   pointer-events: none;
 }
 .toggle.on .toggle-thumb {
-  transform: translateX(13px);
+  transform: translateX(18px);
   background: var(--c-accent);
 }
 
@@ -332,9 +332,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 12px;
-  border-radius: 5px;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   border: 1px solid transparent;
@@ -376,5 +377,200 @@ body {
 .btn-danger:hover:not(:disabled) {
   background: var(--c-err);
   border-color: var(--c-err);
-  color: white;
+  color: var(--c-bg);
+}
+
+/* ─── App Layout Utilities ─────────────────────────────────────────────── */
+.app-scroll-page {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--c-bg);
+  padding: 28px;
+}
+
+.settings-shell {
+  width: min(100%, 980px);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.section-frame {
+  border: 1px solid var(--c-border-sub);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+
+.settings-row {
+  padding: 16px;
+  background: var(--c-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 0;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--c-border-sub);
+}
+
+.settings-row-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-row-control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: min-content;
+  max-width: 100%;
+}
+
+.settings-collapsed-summary {
+  padding: 16px;
+  background: var(--c-surface);
+  color: var(--c-text-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.auth-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-credential-row,
+.auth-export-panel {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.auth-secret-field {
+  flex: 1 1 260px;
+  max-width: 380px;
+}
+
+.auth-filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.auth-filter-chips {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.auth-filter-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.auth-export-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.checkbox-control {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--c-accent);
+}
+
+@media (max-width: 900px) {
+  .app-scroll-page {
+    padding: 20px;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-scroll-page {
+    padding: 16px;
+  }
+
+  .settings-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .settings-row-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .settings-row-control > input,
+  .settings-row-control > select,
+  .settings-row-control > textarea {
+    width: 100%;
+  }
+
+  .auth-credential-row,
+  .auth-export-panel,
+  .auth-filter-summary,
+  .auth-export-actions {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .auth-secret-field,
+  .auth-filter-summary,
+  .auth-filter-summary > button,
+  .auth-export-actions > * {
+    width: 100%;
+  }
+
+  .auth-filter-chips {
+    justify-content: flex-start;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  input,
+  select {
+    min-height: 44px;
+  }
+
+  .checkbox-control {
+    width: 22px;
+    height: 22px;
+  }
 }

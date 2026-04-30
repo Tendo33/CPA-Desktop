@@ -27,7 +27,7 @@ export function DoneStep({ credentials, onContinue }: Props) {
             fontWeight: 600,
             color: 'var(--c-text-1)',
             margin: 0,
-            letterSpacing: '-0.015em',
+            letterSpacing: 0,
           }}
         >
           {t.setup.doneTitle}

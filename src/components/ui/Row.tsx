@@ -6,21 +6,20 @@ interface RowProps {
   hint?: string
   children: ReactNode
   first?: boolean
+  className?: string
+  controlClassName?: string
 }
 
-export function Row({ label, hint, children, first }: RowProps) {
+export function Row({ label, hint, children, first, className, controlClassName }: RowProps) {
   return (
-    <div
-      className={cn(
-        'px-3.5 py-3 bg-surface flex items-center justify-between gap-4',
-        !first && 'border-t border-border-sub',
-      )}
-    >
-      <div className="flex flex-col gap-0.5 min-w-0">
+    <div className={cn('settings-row', !first && 'border-t border-border-sub', className)}>
+      <div className="settings-row-copy">
         <span className="text-[13px] font-medium text-text-1">{label}</span>
-        {hint && <span className="text-[11px] text-text-3">{hint}</span>}
+        {hint && (
+          <span className="text-[12px] leading-relaxed text-text-3 break-words">{hint}</span>
+        )}
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className={cn('settings-row-control', controlClassName)}>{children}</div>
     </div>
   )
 }

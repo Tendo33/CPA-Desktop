@@ -86,8 +86,7 @@ export default function App() {
         // and we've never run, switch to it before deciding.
         if (!status.binaryPresent) {
           const detected = await detectInstallSources().catch(() => null)
-          const candidate =
-            detected?.homebrew?.source ?? detected?.systemPath?.source ?? null
+          const candidate = detected?.homebrew?.source ?? detected?.systemPath?.source ?? null
           if (candidate) {
             await setInstallSource(candidate).catch((e) =>
               console.error('auto-switch install source failed', e),
@@ -101,9 +100,7 @@ export default function App() {
           status.configPresent &&
           status.secretKeySet &&
           status.apiKeysConfigured
-        setBoot(
-          setupComplete ? { kind: 'ready' } : { kind: 'needsSetup', status },
-        )
+        setBoot(setupComplete ? { kind: 'ready' } : { kind: 'needsSetup', status })
       } catch (err) {
         console.error('setup probe failed; assuming ready', err)
         // Best-effort fallback: if we can't probe, get the user into the
@@ -249,12 +246,7 @@ export default function App() {
   }
 
   if (boot.kind === 'needsSetup') {
-    return (
-      <SetupWizard
-        initial={boot.status}
-        onComplete={() => setBoot({ kind: 'ready' })}
-      />
-    )
+    return <SetupWizard initial={boot.status} onComplete={() => setBoot({ kind: 'ready' })} />
   }
 
   return (
@@ -281,9 +273,9 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.main
               key={page}
-              initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             >

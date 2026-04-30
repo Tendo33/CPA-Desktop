@@ -64,12 +64,12 @@ export function Logs() {
   return (
     <div className="flex flex-col h-full bg-bg">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-2.5 h-9 bg-surface border-b border-border-sub shrink-0">
+      <div className="flex min-h-12 items-center gap-3 px-4 py-2 bg-surface border-b border-border-sub shrink-0 flex-wrap">
         <Input
           placeholder={t.logs.filter}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-36"
+          className="w-48"
         />
 
         <Tabs
@@ -105,7 +105,8 @@ export function Logs() {
         <button
           onClick={handleClear}
           title={t.logs.clearLogs}
-          className="flex items-center justify-center w-6 h-6 rounded border-0 bg-transparent text-text-3 cursor-pointer transition-colors hover:bg-hover hover:text-err"
+          aria-label={t.logs.clearLogs}
+          className="flex items-center justify-center w-9 h-9 rounded-md border-0 bg-transparent text-text-3 cursor-pointer transition-colors hover:bg-hover hover:text-err"
         >
           <Trash2 size={13} strokeWidth={1.75} />
         </button>

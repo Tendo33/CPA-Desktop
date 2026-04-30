@@ -43,7 +43,7 @@ export function Tabs<T extends string>({
     <div
       ref={containerRef}
       role="tablist"
-      className={cn('flex gap-0.5 p-0.5 bg-raised rounded border border-border', className)}
+      className={cn('flex gap-1 p-1 bg-raised rounded-md border border-border', className)}
       onKeyDown={handleKeyDown}
     >
       {items.map(({ id, label }) => {
@@ -56,7 +56,7 @@ export function Tabs<T extends string>({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(id)}
             className={cn(
-              'text-[10px] px-1.5 py-0.5 rounded border-0 cursor-pointer tracking-wide transition-colors',
+              'min-h-8 text-xs px-2.5 py-1 rounded border-0 cursor-pointer tracking-wide transition-colors',
               tabClassName
                 ? tabClassName(isActive, id)
                 : isActive

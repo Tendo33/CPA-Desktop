@@ -67,7 +67,7 @@ export function MgmtUnavailableOverlay({ reason, onGoToSettings, onReload }: Pro
               fontSize: 24,
               fontWeight: 600,
               color: 'var(--c-text-1)',
-              letterSpacing: '-0.02em',
+              letterSpacing: 0,
               lineHeight: 1.15,
               margin: 0,
             }}
