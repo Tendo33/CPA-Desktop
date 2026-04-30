@@ -145,8 +145,8 @@ describe('generated assets', () => {
     expect(pixelAt('assets/brand/cpa-desktop-icon.png', 1023, 1023).a).toBe(0)
   })
 
-  test('cross-platform tray icon has visible pixels on dark taskbars', () => {
-    const pixels = visiblePixels('src-tauri/icons/tray.png')
+  test('cross-platform icon has visible pixels on dark taskbars', () => {
+    const pixels = visiblePixels('src-tauri/icons/icon.png')
     const averageLuma =
       pixels.reduce((total, { r, g, b }) => total + 0.2126 * r + 0.7152 * g + 0.0722 * b, 0) /
       pixels.length

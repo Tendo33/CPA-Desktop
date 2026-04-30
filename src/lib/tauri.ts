@@ -223,11 +223,14 @@ export interface ExportResult {
   sub2apiFailures: ExportFailure[]
 }
 
-export const listAuthFiles = (adminPassword: string) =>
-  invoke<AuthFileInfo[]>('list_auth_files', { adminPassword })
+export const createAuthSession = (adminPassword: string) =>
+  invoke<string>('create_auth_session', { adminPassword })
+
+export const listAuthFiles = (sessionId: string) =>
+  invoke<AuthFileInfo[]>('list_auth_files', { sessionId })
 
 export const exportAuthFiles = (args: {
-  adminPassword: string
+  sessionId: string
   names: string[]
   exportCpa: boolean
   exportSub2api: boolean

@@ -59,21 +59,7 @@ const appIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 </svg>
 `
 
-const traySvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g id="cpa-native-mark" stroke="#F8FAFC" stroke-linecap="round" stroke-linejoin="round">
-    <path id="cpa-diamond" d="M16 3.3L28.7 16L16 28.7L3.3 16L16 3.3Z" stroke-width="2.1"/>
-    <g id="cpa-knot">
-      <path d="M16 9.1C19.5 11.5 21.2 13.7 21.2 16C21.2 18.3 19.5 20.5 16 22.9C12.5 20.5 10.8 18.3 10.8 16C10.8 13.7 12.5 11.5 16 9.1Z" stroke-width="1.8"/>
-      <path d="M9.1 16C11.5 12.5 13.7 10.8 16 10.8C18.3 10.8 20.5 12.5 22.9 16C20.5 19.5 18.3 21.2 16 21.2C13.7 21.2 11.5 19.5 9.1 16Z" stroke-width="1.8"/>
-      <circle cx="16" cy="16" r="1.8" fill="#F8FAFC" stroke="none"/>
-    </g>
-  </g>
-</svg>
-`
-
 writeFileSync(path.join(brandDir, 'cpa-desktop-icon.svg'), appIconSvg)
-writeFileSync(path.join(brandDir, 'cpa-desktop-tray.svg'), traySvg)
 
 function htmlShell(body, { width, height, transparent = false } = {}) {
   return `<!doctype html>
@@ -142,15 +128,6 @@ renderHtml(
   path.join(publicDir, 'favicon.png'),
   { transparent: true },
 )
-renderHtml(
-  'tray',
-  imagePage(traySvg, 32, 32, true),
-  32,
-  32,
-  path.join(root, 'src-tauri', 'icons', 'tray.png'),
-  { transparent: true },
-)
-
 const markSvg = appIconSvg
   .replace('width="1024" height="1024"', 'width="96" height="96"')
   .replace('viewBox="0 0 1024 1024"', 'viewBox="0 0 1024 1024"')
@@ -525,17 +502,12 @@ execFileSync(npmCmd, ['run', 'tauri', 'icon', '--', 'assets/brand/cpa-desktop-ic
   stdio: 'inherit',
 })
 
-for (const name of ['64x64.png', 'icon.png', 'StoreLogo.png']) {
-  rmSync(path.join(tauriIconDir, name), { force: true })
-}
 if (existsSync(tauriIconDir)) {
   for (const name of readdirSync(tauriIconDir)) {
-    if (/^Square\d+x\d+Logo\.png$/.test(name)) {
-      rmSync(path.join(tauriIconDir, name), { force: true })
+    if (name !== 'icon.png') {
+      rmSync(path.join(tauriIconDir, name), { recursive: true, force: true })
     }
   }
 }
-rmSync(path.join(tauriIconDir, 'android'), { recursive: true, force: true })
-rmSync(path.join(tauriIconDir, 'ios'), { recursive: true, force: true })
 
 rmSync(tempDir, { recursive: true, force: true })

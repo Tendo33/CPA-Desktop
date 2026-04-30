@@ -4,6 +4,7 @@ import { Button, Input } from '@/components/ui'
 import {
   type AuthFileInfo,
   type ExportResult,
+  createAuthSession,
   exportAuthFiles,
   listAuthFiles,
   readConfigField,
@@ -71,6 +72,8 @@ export function AuthFilesPage() {
   const [exporting, setExporting] = useState(false)
   const [statusText, setStatusText] = useState<string>(t.authFiles.emptyInitial)
   const [statusTone, setStatusTone] = useState<'info' | 'success' | 'warn' | 'error'>('info')
+
+  const createSession = async () => createAuthSession(password)
 
   useEffect(() => {
     localStorage.setItem(LS_PASSWORD, password)
@@ -164,7 +167,8 @@ export function AuthFilesPage() {
     setStatusText(t.authFiles.refreshing)
     setStatusTone('info')
     try {
-      const list = await listAuthFiles(password)
+      const sessionId = await createSession()
+      const list = await listAuthFiles(sessionId)
       setItems(list)
       setSelected((prev) => {
         const validIds = new Set(list.map((it) => it.id))
@@ -207,8 +211,9 @@ export function AuthFilesPage() {
     setStatusText(t.authFiles.exporting)
     setStatusTone('info')
     try {
+      const sessionId = await createSession()
       const res: ExportResult = await exportAuthFiles({
-        adminPassword: password,
+        sessionId,
         names: target.map((it) => it.sourceName),
         exportCpa,
         exportSub2api,

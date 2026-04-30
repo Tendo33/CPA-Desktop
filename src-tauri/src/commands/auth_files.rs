@@ -11,8 +11,9 @@
 //! proxy env and skip cert verification — same trust boundary as
 //! the rest of the desktop shell.
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use futures_util::stream::{FuturesUnordered, StreamExt};
@@ -48,7 +49,7 @@ pub struct AuthFileInfo {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportArgs {
-    pub admin_password: String,
+    pub session_id: String,
     pub names: Vec<String>,
     pub export_cpa: bool,
     pub export_sub2api: bool,
@@ -56,6 +57,74 @@ pub struct ExportArgs {
     /// 5 if the caller passes 0/None — same default as the userscript.
     #[serde(default)]
     pub concurrency: Option<u32>,
+}
+
+#[derive(Clone)]
+struct AuthSession {
+    bearer: String,
+    expires_at: Instant,
+}
+
+pub struct AuthSessionState {
+    ttl: Duration,
+    sessions: Mutex<HashMap<String, AuthSession>>,
+}
+
+impl AuthSessionState {
+    pub fn new(ttl: Duration) -> Self {
+        Self {
+            ttl,
+            sessions: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn create(&self, admin_password: String) -> Result<String, String> {
+        let token = bearer(&admin_password);
+        if token.is_empty() {
+            return Err("management secret-key is empty".into());
+        }
+        let session_id = generate_session_id();
+        let session = AuthSession {
+            bearer: token,
+            expires_at: Instant::now() + self.ttl,
+        };
+        self.sessions
+            .lock()
+            .map_err(|_| "auth session lock poisoned".to_string())?
+            .insert(session_id.clone(), session);
+        Ok(session_id)
+    }
+
+    fn header_for(&self, session_id: &str) -> Result<Option<(String, String)>, String> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "auth session lock poisoned".to_string())?;
+        let Some(session) = sessions.get(session_id).cloned() else {
+            return Err("auth session expired; refresh credentials".into());
+        };
+        if Instant::now() >= session.expires_at {
+            sessions.remove(session_id);
+            return Err("auth session expired; refresh credentials".into());
+        }
+        Ok(Some((
+            "Authorization".to_string(),
+            format!("Bearer {}", session.bearer),
+        )))
+    }
+}
+
+impl Default for AuthSessionState {
+    fn default() -> Self {
+        Self::new(Duration::from_secs(120))
+    }
+}
+
+fn generate_session_id() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,13 +171,12 @@ fn bearer(password: &str) -> String {
     stripped.to_string()
 }
 
-fn auth_header(password: &str) -> Option<(String, String)> {
-    let token = bearer(password);
-    if token.is_empty() {
-        None
-    } else {
-        Some(("Authorization".to_string(), format!("Bearer {token}")))
-    }
+#[tauri::command]
+pub fn create_auth_session(
+    sessions: State<'_, AuthSessionState>,
+    admin_password: String,
+) -> Result<String, String> {
+    sessions.create(admin_password)
 }
 
 fn map_status(status: reqwest::StatusCode, ctx: &str) -> Result<(), String> {
@@ -134,12 +202,13 @@ fn download_url(port: u16) -> String {
 #[tauri::command]
 pub async fn list_auth_files(
     state: State<'_, SharedCpaState>,
-    admin_password: String,
+    sessions: State<'_, AuthSessionState>,
+    session_id: String,
 ) -> Result<Vec<AuthFileInfo>, String> {
     let port = state.lock().unwrap().port;
     let client = loopback_client()?;
     let mut req = client.get(list_url(port));
-    if let Some((k, v)) = auth_header(&admin_password) {
+    if let Some((k, v)) = sessions.header_for(&session_id)? {
         req = req.header(k, v);
     }
     let resp = req.send().await.map_err(|e| e.to_string())?;
@@ -157,7 +226,7 @@ pub async fn list_auth_files(
         out.push(prepare_item(item, idx));
     }
     // Newest first, matches the userscript.
-    out.sort_by(|a, b| b.modtime_ms.cmp(&a.modtime_ms));
+    out.sort_by_key(|a| std::cmp::Reverse(a.modtime_ms));
     Ok(out)
 }
 
@@ -165,6 +234,7 @@ pub async fn list_auth_files(
 pub async fn export_auth_files(
     app: AppHandle,
     state: State<'_, SharedCpaState>,
+    sessions: State<'_, AuthSessionState>,
     args: ExportArgs,
 ) -> Result<ExportResult, String> {
     if !args.export_cpa && !args.export_sub2api {
@@ -175,7 +245,7 @@ pub async fn export_auth_files(
     }
     let port = state.lock().unwrap().port;
     let client = Arc::new(loopback_client()?);
-    let header = auth_header(&args.admin_password);
+    let header = sessions.header_for(&args.session_id)?;
     let concurrency = args
         .concurrency
         .filter(|n| *n > 0)
@@ -270,14 +340,11 @@ pub async fn export_auth_files(
     let mut sub2api_failures: Vec<ExportFailure> = Vec::new();
     let mut sub2api_success = 0usize;
     if args.export_sub2api {
-        let exported_at = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%SZ")
-            .to_string();
+        let exported_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let mut used = std::collections::HashSet::new();
         let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
         for (i, ok) in successes.iter().enumerate() {
-            let sub_name =
-                unique_json_name(&build_sub2api_name(&ok.file_name), i + 1, &mut used);
+            let sub_name = unique_json_name(&build_sub2api_name(&ok.file_name), i + 1, &mut used);
             // We only know the type post-download (the list call gives
             // it but we passed only names downstream). Cheap to detect
             // from the JSON itself; missing fields → not codex.
@@ -383,7 +450,9 @@ async fn save_dialog(app: &AppHandle, default_name: &str) -> Option<String> {
     // platform path. Fall back to the Display impl for unusual cases
     // (e.g. blob URIs on mobile, which don't apply here but are cheap
     // to be defensive about).
-    path.into_path().ok().map(|p| p.to_string_lossy().into_owned())
+    path.into_path()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 struct DownloadOk {
@@ -406,8 +475,7 @@ fn spawn_download(
     header: Option<(String, String)>,
 ) -> tokio::task::JoinHandle<DownloadOutcome> {
     tokio::spawn(async move {
-        let result =
-            download_one(client.as_ref(), &url, header.as_ref(), &source_name).await;
+        let result = download_one(client.as_ref(), &url, header.as_ref(), &source_name).await;
         DownloadOutcome {
             idx,
             source_name,
@@ -525,10 +593,7 @@ fn parse_iso_to_millis(s: &str) -> i64 {
 
 fn basename(name: &str) -> String {
     let trimmed = name.trim();
-    let last = trimmed
-        .rsplit(|c| c == '/' || c == '\\')
-        .next()
-        .unwrap_or(trimmed);
+    let last = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
     last.to_string()
 }
 
@@ -872,11 +937,7 @@ fn transform_to_sub2api(
 
     let expires_at = first_meaningful_value(&[
         access_payload.get("exp").cloned(),
-        first_path_value(
-            source,
-            &[&["expires_at"], &["credentials", "expires_at"]],
-        )
-        .cloned(),
+        first_path_value(source, &[&["expires_at"], &["credentials", "expires_at"]]).cloned(),
     ]);
     let expires_at_num = expires_at
         .as_ref()
@@ -990,28 +1051,27 @@ fn transform_to_sub2api(
     let mut root = Map::new();
     root.insert("exported_at".into(), Value::String(exported_at.into()));
     root.insert("proxies".into(), Value::Array(vec![]));
-    root.insert("accounts".into(), Value::Array(vec![Value::Object(account)]));
+    root.insert(
+        "accounts".into(),
+        Value::Array(vec![Value::Object(account)]),
+    );
 
     serde_json::to_string_pretty(&Value::Object(root)).map_err(|e| e.to_string())
 }
 
 fn first_meaningful_str(opts: &[Option<String>]) -> String {
-    for o in opts {
-        if let Some(s) = o {
-            if !s.trim().is_empty() {
-                return s.clone();
-            }
+    for s in opts.iter().flatten() {
+        if !s.trim().is_empty() {
+            return s.clone();
         }
     }
     String::new()
 }
 
 fn first_meaningful_value(opts: &[Option<Value>]) -> Option<Value> {
-    for o in opts {
-        if let Some(v) = o {
-            if !v.is_null() {
-                return Some(v.clone());
-            }
+    for v in opts.iter().flatten() {
+        if !v.is_null() {
+            return Some(v.clone());
         }
     }
     None
@@ -1022,8 +1082,7 @@ mod tests {
     use super::*;
 
     fn make_jwt(payload: Value) -> String {
-        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(b"{\"alg\":\"none\"}");
+        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"{\"alg\":\"none\"}");
         let body = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(serde_json::to_vec(&payload).unwrap());
         format!("{header}.{body}.")
@@ -1034,6 +1093,29 @@ mod tests {
         assert_eq!(basename("a/b/c.json"), "c.json");
         assert_eq!(basename("a\\b.json"), "b.json");
         assert_eq!(basename("plain.json"), "plain.json");
+    }
+
+    #[test]
+    fn auth_session_exchanges_secret_for_opaque_token() {
+        let sessions = AuthSessionState::new(std::time::Duration::from_secs(60));
+
+        let session_id = sessions.create("Bearer secret-token".into()).unwrap();
+        let header = sessions.header_for(&session_id).unwrap();
+
+        assert_ne!(session_id, "secret-token");
+        assert_eq!(
+            header,
+            Some(("Authorization".into(), "Bearer secret-token".into()))
+        );
+    }
+
+    #[test]
+    fn auth_session_rejects_expired_token() {
+        let sessions = AuthSessionState::new(std::time::Duration::from_secs(0));
+
+        let session_id = sessions.create("secret-token".into()).unwrap();
+
+        assert!(sessions.header_for(&session_id).is_err());
     }
 
     #[test]
@@ -1074,8 +1156,7 @@ mod tests {
             "refresh_token": "rt",
             "id_token": id_tok,
         });
-        let out =
-            transform_to_sub2api(&source, "alice.json", "2026-04-28T00:00:00Z").unwrap();
+        let out = transform_to_sub2api(&source, "alice.json", "2026-04-28T00:00:00Z").unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
         let acct = &v["accounts"][0];
         assert_eq!(acct["name"], "alice");
@@ -1088,12 +1169,8 @@ mod tests {
 
     #[test]
     fn transform_rejects_missing_tokens() {
-        let err = transform_to_sub2api(
-            &serde_json::json!({"access_token": "x"}),
-            "x.json",
-            "ts",
-        )
-        .unwrap_err();
+        let err = transform_to_sub2api(&serde_json::json!({"access_token": "x"}), "x.json", "ts")
+            .unwrap_err();
         assert!(err.contains("access_token") || err.contains("refresh_token"));
     }
 
@@ -1109,7 +1186,10 @@ mod tests {
         assert_eq!(zip.len(), 2);
         let mut buf = String::new();
         use std::io::Read;
-        zip.by_name("a.json").unwrap().read_to_string(&mut buf).unwrap();
+        zip.by_name("a.json")
+            .unwrap()
+            .read_to_string(&mut buf)
+            .unwrap();
         assert_eq!(buf, "{\"hello\":1}");
     }
 }

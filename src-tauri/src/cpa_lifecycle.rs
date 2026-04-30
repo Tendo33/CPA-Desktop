@@ -3,7 +3,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::cpa_manager::{kill_cpa, spawn_cpa, CpaStatus, SharedCpaState};
 use crate::log_stream::{pipe_process_output, LogBuffer};
 use crate::util::port::is_port_available;
-use crate::{app_config, http_health, http_ping, spawn_health_monitor};
+use crate::{app_config, http_health, is_cpa_service, spawn_health_monitor};
 
 pub async fn start(app: AppHandle) -> Result<(), String> {
     let cpa_state = app
@@ -32,7 +32,8 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
     // If something already answers our health probe on the port, assume
     // it's a CPA we should attach to (the original "external CPA"
     // handoff behaviour).
-    if http_ping(port).await {
+    let settings = app_config::load_settings(&app);
+    if is_cpa_service(port, &settings.health_path).await {
         cpa_state.lock().unwrap().status = CpaStatus::Running;
         let _ = app.emit("cpa:status", &CpaStatus::Running);
         return Ok(());
@@ -58,10 +59,10 @@ pub async fn start(app: AppHandle) -> Result<(), String> {
         output.stdout,
         output.stderr,
         port,
+        spawned_epoch,
         cpa_state.clone(),
     );
 
-    let settings = app_config::load_settings(&app);
     let timeout_secs = settings.start_timeout_secs.max(5);
     let health_path = settings.health_path.clone();
 

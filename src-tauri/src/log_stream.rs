@@ -1,5 +1,6 @@
 use chrono::Utc;
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
@@ -46,10 +47,10 @@ pub struct LogLine {
     pub text: String,
 }
 
-pub type LogBuffer = Arc<Mutex<Vec<LogLine>>>;
+pub type LogBuffer = Arc<Mutex<VecDeque<LogLine>>>;
 
 pub fn new_log_buffer() -> LogBuffer {
-    Arc::new(Mutex::new(Vec::with_capacity(RING_SIZE)))
+    Arc::new(Mutex::new(VecDeque::with_capacity(RING_SIZE)))
 }
 
 pub fn append(buf: &LogBuffer, level: &str, text: String) {
@@ -60,13 +61,35 @@ pub fn append(buf: &LogBuffer, level: &str, text: String) {
     };
     let mut b = buf.lock().unwrap();
     if b.len() >= RING_SIZE {
-        b.remove(0);
+        b.pop_front();
     }
-    b.push(line);
+    b.push_back(line);
 }
 
 pub fn get_all(buf: &LogBuffer) -> Vec<LogLine> {
-    buf.lock().unwrap().clone()
+    buf.lock().unwrap().iter().cloned().collect()
+}
+
+fn is_current_epoch(state: &crate::cpa_manager::SharedCpaState, expected_epoch: u64) -> bool {
+    state
+        .lock()
+        .map(|s| s.epoch == expected_epoch)
+        .unwrap_or(false)
+}
+
+fn mark_port_in_use_if_current(
+    state: &crate::cpa_manager::SharedCpaState,
+    expected_epoch: u64,
+    port: u16,
+) -> Option<crate::cpa_manager::CpaStatus> {
+    let msg = format!("port_in_use:{port}");
+    let status = crate::cpa_manager::CpaStatus::Error(msg);
+    let mut s = state.lock().ok()?;
+    if s.epoch != expected_epoch {
+        return None;
+    }
+    s.status = status.clone();
+    Some(status)
 }
 
 /// Spawn threads to read stdout and stderr from a process and emit events.
@@ -79,12 +102,17 @@ pub fn pipe_process_output(
     stdout: std::process::ChildStdout,
     stderr: std::process::ChildStderr,
     port: u16,
+    spawned_epoch: u64,
     cpa_state: crate::cpa_manager::SharedCpaState,
 ) {
     let app1 = app.clone();
     let buf1 = buf.clone();
+    let state1 = cpa_state.clone();
     std::thread::spawn(move || {
         for raw in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !is_current_epoch(&state1, spawned_epoch) {
+                break;
+            }
             let line = redact(&raw);
             append(&buf1, "stdout", line.clone());
             let _ = app1.emit(
@@ -101,15 +129,16 @@ pub fn pipe_process_output(
     let buf2 = buf;
     std::thread::spawn(move || {
         for raw in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if !is_current_epoch(&cpa_state, spawned_epoch) {
+                break;
+            }
             let line = redact(&raw);
             append(&buf2, "stderr", line.clone());
             let lower = line.to_lowercase();
             if lower.contains("address already in use") || lower.contains("bind: only one usage") {
-                let msg = format!("port_in_use:{port}");
-                if let Ok(mut s) = cpa_state.lock() {
-                    s.status = crate::cpa_manager::CpaStatus::Error(msg.clone());
+                if let Some(status) = mark_port_in_use_if_current(&cpa_state, spawned_epoch, port) {
+                    let _ = app.emit("cpa:status", &status);
                 }
-                let _ = app.emit("cpa:status", &crate::cpa_manager::CpaStatus::Error(msg));
             }
             let _ = app.emit(
                 "cpa:log",
@@ -144,5 +173,60 @@ mod tests {
     fn keeps_non_secret_lines_intact() {
         let r = redact("listening on 0.0.0.0:8317");
         assert_eq!(r, "listening on 0.0.0.0:8317");
+    }
+
+    #[test]
+    fn log_buffer_keeps_latest_lines_in_fifo_order() {
+        let buf = new_log_buffer();
+        for i in 0..=RING_SIZE {
+            append(&buf, "stdout", format!("line {i}"));
+        }
+
+        let lines = get_all(&buf);
+        assert_eq!(lines.len(), RING_SIZE);
+        assert_eq!(lines.first().unwrap().text, "line 1");
+        assert_eq!(lines.last().unwrap().text, format!("line {RING_SIZE}"));
+        assert_eq!(buf.lock().unwrap().front().unwrap().text, "line 1");
+    }
+
+    #[test]
+    fn port_in_use_status_is_ignored_for_stale_epoch() {
+        let state = crate::cpa_manager::new_shared_state(8317);
+        {
+            let mut s = state.lock().unwrap();
+            s.epoch = 2;
+            s.status = crate::cpa_manager::CpaStatus::Running;
+        }
+
+        let status = mark_port_in_use_if_current(&state, 1, 8317);
+
+        assert!(status.is_none());
+        assert_eq!(
+            state.lock().unwrap().status,
+            crate::cpa_manager::CpaStatus::Running
+        );
+    }
+
+    #[test]
+    fn port_in_use_status_updates_for_current_epoch() {
+        let state = crate::cpa_manager::new_shared_state(8317);
+        {
+            let mut s = state.lock().unwrap();
+            s.epoch = 3;
+            s.status = crate::cpa_manager::CpaStatus::Starting;
+        }
+
+        let status = mark_port_in_use_if_current(&state, 3, 8317);
+
+        assert_eq!(
+            status,
+            Some(crate::cpa_manager::CpaStatus::Error(
+                "port_in_use:8317".into()
+            ))
+        );
+        assert_eq!(
+            state.lock().unwrap().status,
+            crate::cpa_manager::CpaStatus::Error("port_in_use:8317".into())
+        );
     }
 }

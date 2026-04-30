@@ -2,6 +2,7 @@ use crate::app_config;
 use crate::cpa_manager::SharedCpaState;
 use crate::install_source::{InstallSource, UpdateStrategy};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,6 +49,40 @@ fn newer_than(latest: &str, current: Option<&str>) -> bool {
         (Ok(a), Ok(b)) => a > b,
         _ => latest != cur,
     }
+}
+
+fn effective_current_version(
+    settings_version: Option<String>,
+    detected_binary_version: Option<String>,
+) -> Option<String> {
+    detected_binary_version.or(settings_version)
+}
+
+fn detect_binary_version(binary_path: &Path) -> Option<String> {
+    if !binary_path.exists() {
+        return None;
+    }
+    let output = std::process::Command::new(binary_path)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_version_from_text(&String::from_utf8_lossy(&output.stdout))
+        .or_else(|| parse_version_from_text(&String::from_utf8_lossy(&output.stderr)))
+}
+
+fn parse_version_from_text(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .find(|part| {
+            let trimmed = part.trim_start_matches('v');
+            semver::Version::parse(trimmed).is_ok()
+        })
+        .map(|part| {
+            part.trim_matches(|c: char| c == ',' || c == ';')
+                .to_string()
+        })
 }
 
 fn asset_name(version: &str) -> String {
@@ -107,7 +142,12 @@ pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
     // Look for a matching `*.sha256` asset OR a `checksums.txt` listing.
     let expected_sha256 = find_expected_sha256(&client, &release, &name).await;
 
-    let current = settings.cpa_version.clone();
+    let detected = if matches!(settings.install_source, InstallSource::Managed) {
+        detect_binary_version(&app_config::cpa_binary_path(&app))
+    } else {
+        None
+    };
+    let current = effective_current_version(settings.cpa_version.clone(), detected);
     let update_available = newer_than(&release.tag_name, current.as_deref());
 
     Ok(UpdateCheckResult {
@@ -189,7 +229,7 @@ async fn download_with_mirrors(
     original_url: &str,
     mirrors: &[String],
     partial_path: &std::path::Path,
-) -> Result<Vec<u8>, String> {
+) -> Result<PathBuf, String> {
     use futures_util::StreamExt;
     use std::io::Write;
 
@@ -266,10 +306,8 @@ async fn download_with_mirrors(
             continue;
         }
 
-        // Done — read full buffer and clean up partial.
-        let buf = std::fs::read(partial_path).map_err(|e| e.to_string())?;
-        let _ = std::fs::remove_file(partial_path);
-        return Ok(buf);
+        // Done. Keep the file on disk so checksum and extraction can stream it.
+        return Ok(partial_path.to_path_buf());
     }
 
     Err(last_err.unwrap_or_else(|| "all mirrors failed".into()))
@@ -319,12 +357,20 @@ pub async fn download_cpa_update(
         ]
     });
 
-    let buf = download_with_mirrors(&app, &client, &download_url, &mirrors, &partial_path).await?;
+    let downloaded_path =
+        download_with_mirrors(&app, &client, &download_url, &mirrors, &partial_path).await?;
 
     // Integrity check before we touch anything on disk.
     if let Some(expected) = expected_sha256.as_deref() {
-        let got = sha256_hex(&buf);
+        let got = match sha256_hex_file(&downloaded_path) {
+            Ok(g) => g,
+            Err(e) => {
+                let _ = std::fs::remove_file(&downloaded_path);
+                return Err(e);
+            }
+        };
         if !got.eq_ignore_ascii_case(expected) {
+            let _ = std::fs::remove_file(&downloaded_path);
             return Err(format!(
                 "checksum mismatch: expected {expected}, got {got} (download discarded)"
             ));
@@ -344,11 +390,16 @@ pub async fn download_cpa_update(
     // replaces a working install.
     let staging = bin_dir.join(format!("{binary_name}.new"));
     let _ = std::fs::remove_file(&staging);
-    if download_url.ends_with(".zip") {
-        extract_zip_to(&buf, binary_name, &staging)?;
+    let extract_res = if download_url.ends_with(".zip") {
+        extract_zip_to(&downloaded_path, binary_name, &staging)
     } else {
-        extract_targz_to(&buf, binary_name, &staging)?;
+        extract_targz_to(&downloaded_path, binary_name, &staging)
+    };
+    if let Err(e) = extract_res {
+        let _ = std::fs::remove_file(&downloaded_path);
+        return Err(e);
     }
+    let _ = std::fs::remove_file(&downloaded_path);
 
     #[cfg(unix)]
     {
@@ -417,6 +468,7 @@ pub async fn download_cpa_update(
     Ok(())
 }
 
+#[cfg(test)]
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -424,17 +476,57 @@ fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(h.finalize())
 }
 
+fn sha256_hex_file(path: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut h = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    Ok(hex::encode(h.finalize()))
+}
+
+fn atomic_copy_reader_to_path<R: std::io::Read>(
+    mut reader: R,
+    out_path: &Path,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let parent = out_path
+        .parent()
+        .ok_or_else(|| "destination has no parent".to_string())?;
+    let tmp = parent.join(format!(
+        ".{}.tmp",
+        out_path
+            .file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_else(|| "download".into())
+    ));
+    let result = (|| {
+        let mut out = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        std::io::copy(&mut reader, &mut out).map_err(|e| e.to_string())?;
+        out.flush().map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, out_path).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// Extract `binary_name` from `data` into `out_path` exactly. Caller
 /// chooses the destination path so we can stage to `<binary>.new` and
 /// atomically swap.
-fn extract_zip_to(
-    data: &[u8],
-    binary_name: &str,
-    out_path: &std::path::Path,
-) -> Result<(), String> {
-    use std::io::Read;
-    let cursor = std::io::Cursor::new(data);
-    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+fn extract_zip_to(archive_path: &Path, binary_name: &str, out_path: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
@@ -443,26 +535,19 @@ fn extract_zip_to(
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_default();
         if file_name == binary_name {
-            let mut content = Vec::new();
-            file.read_to_end(&mut content).map_err(|e| e.to_string())?;
-            crate::app_config::atomic_write(out_path, &content).map_err(|e| e.to_string())?;
+            atomic_copy_reader_to_path(&mut file, out_path)?;
             return Ok(());
         }
     }
     Err(format!("{binary_name} not found in zip"))
 }
 
-fn extract_targz_to(
-    data: &[u8],
-    binary_name: &str,
-    out_path: &std::path::Path,
-) -> Result<(), String> {
+fn extract_targz_to(archive_path: &Path, binary_name: &str, out_path: &Path) -> Result<(), String> {
     use flate2::read::GzDecoder;
-    use std::io::Read;
     use tar::Archive;
 
-    let cursor = std::io::Cursor::new(data);
-    let gz = GzDecoder::new(cursor);
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let gz = GzDecoder::new(file);
     let mut archive = Archive::new(gz);
 
     for entry in archive.entries().map_err(|e| e.to_string())? {
@@ -473,9 +558,7 @@ fn extract_targz_to(
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_default();
         if file_name == binary_name {
-            let mut content = Vec::new();
-            entry.read_to_end(&mut content).map_err(|e| e.to_string())?;
-            crate::app_config::atomic_write(out_path, &content).map_err(|e| e.to_string())?;
+            atomic_copy_reader_to_path(&mut entry, out_path)?;
             return Ok(());
         }
     }
@@ -532,6 +615,30 @@ mod tests {
     #[test]
     fn semver_handles_missing_current() {
         assert!(newer_than("v1.0.0", None));
+    }
+
+    #[test]
+    fn detected_binary_version_overrides_stale_settings_version() {
+        let current = effective_current_version(Some("v1.2.0".into()), Some("v1.3.0".into()));
+        assert_eq!(current.as_deref(), Some("v1.3.0"));
+        assert!(!newer_than("v1.3.0", current.as_deref()));
+    }
+
+    #[test]
+    fn settings_version_is_used_when_binary_version_is_unknown() {
+        let current = effective_current_version(Some("v1.2.0".into()), None);
+        assert_eq!(current.as_deref(), Some("v1.2.0"));
+    }
+
+    #[test]
+    fn sha256_hex_file_matches_in_memory_hash() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"hello from disk").unwrap();
+
+        assert_eq!(
+            sha256_hex_file(tmp.path()).unwrap(),
+            sha256_hex(b"hello from disk")
+        );
     }
 
     #[test]

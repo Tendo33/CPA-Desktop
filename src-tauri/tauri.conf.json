@@ -22,8 +22,8 @@
       }
     ],
     "trayIcon": {
-      "iconPath": "icons/tray.png",
-      "iconAsTemplate": true
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false
     },
     "security": {
       "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://api.github.com https://github.com https://objects.githubusercontent.com https://*.githubusercontent.com; img-src 'self' data: blob: http://localhost:* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://*"
@@ -37,11 +37,7 @@
     "shortDescription": "Desktop manager for CLIProxyAPI",
     "longDescription": "CPA Desktop is a native desktop manager for CLIProxyAPI — auto-download, silent background start, real-time logs, and one-click updates.",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.png"
     ]
   },
   "plugins": {

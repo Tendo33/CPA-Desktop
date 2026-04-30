@@ -12,7 +12,7 @@ jobs:
   # already be green on the commit being tagged. If you ever need to
   # re-validate at release time, dispatch the CI workflow manually.
 
-  # ── Generate real macOS icon.icns on macOS before building ────────────────
+  # ── Prepare the single app icon before building ──────────────────────────
   gen-icons:
     runs-on: macos-latest
     steps:

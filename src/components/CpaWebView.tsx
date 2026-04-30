@@ -123,7 +123,9 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
 
     useEffect(() => {
       const win = getCurrentWindow()
-      let unlisten: (() => void) | null = null
+      let disposed = false
+      let resizeUnlisten: (() => void) | null = null
+      let focusUnlisten: (() => void) | null = null
 
       win
         .onResized(async () => {
@@ -134,30 +136,35 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
           await wv.setSize(new LogicalSize(width, height))
         })
         .then((fn) => {
-          unlisten = fn
+          if (disposed) {
+            fn()
+          } else {
+            resizeUnlisten = fn
+          }
         })
 
       win
         .onFocusChanged(async ({ payload: focused }) => {
           if (!focused) return
           const wv = wvRef.current
-          if (wv && visible) {
+          if (wv && visibleRef.current) {
             await wv.show()
             await wv.setFocus().catch(() => {})
           }
         })
         .then((fn) => {
-          const prev = unlisten
-          unlisten = () => {
-            prev?.()
+          if (disposed) {
             fn()
+          } else {
+            focusUnlisten = fn
           }
         })
 
       return () => {
-        unlisten?.()
+        disposed = true
+        resizeUnlisten?.()
+        focusUnlisten?.()
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     return <div className="w-full h-full" />

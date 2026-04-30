@@ -25,13 +25,11 @@ fn http_client() -> &'static reqwest::Client {
     })
 }
 
-/// Liveness probe: prefers the configured health path (default `/health`)
-/// but accepts any 2xx/3xx/4xx as "the process is responding". A 5xx or
-/// transport error counts as down. The catch-anything-non-5xx rule is
-/// deliberate: some CPA versions don't ship `/health` and answer `/` with
-/// a 404 from a stricter router; both still mean "process alive".
+/// Strict CPA probe used before attaching to an already-bound port.
+/// A generic HTTP response is not enough: the service must expose either
+/// a CPA-marked health response or the management auth-files API shape.
 pub(crate) async fn http_ping(port: u16) -> bool {
-    http_health(port, "/health").await
+    is_cpa_service(port, "/health").await
 }
 
 pub(crate) async fn http_health(port: u16, path: &str) -> bool {
@@ -44,6 +42,97 @@ pub(crate) async fn http_health(port: u16, path: &str) -> bool {
     match http_client().get(&url).send().await {
         Ok(resp) => !resp.status().is_server_error(),
         Err(_) => false,
+    }
+}
+
+pub(crate) async fn is_cpa_service(port: u16, health_path: &str) -> bool {
+    if let Some((status, body)) = get_loopback_text(port, health_path).await {
+        if health_response_identifies_cpa(status, &body) {
+            return true;
+        }
+    }
+
+    if let Some((status, body)) = get_loopback_text(port, "/v0/management/auth-files").await {
+        return management_probe_identifies_cpa(status, &body);
+    }
+
+    false
+}
+
+async fn get_loopback_text(port: u16, path: &str) -> Option<(reqwest::StatusCode, String)> {
+    let p = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{path}")
+    };
+    let url = format!("http://127.0.0.1:{port}{p}");
+    let resp = http_client().get(&url).send().await.ok()?;
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    Some((status, body))
+}
+
+fn health_response_identifies_cpa(status: reqwest::StatusCode, body: &str) -> bool {
+    if !status.is_success() {
+        return false;
+    }
+    let lower = body.to_ascii_lowercase();
+    lower.contains("cliproxyapi") || lower.contains("cli-proxy-api")
+}
+
+fn management_probe_identifies_cpa(status: reqwest::StatusCode, body: &str) -> bool {
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return true;
+    }
+    if !status.is_success() {
+        return false;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    value.get("files").and_then(|v| v.as_array()).is_some()
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+    use reqwest::StatusCode;
+
+    #[test]
+    fn arbitrary_404_does_not_identify_cpa() {
+        assert!(!management_probe_identifies_cpa(
+            StatusCode::NOT_FOUND,
+            "{}"
+        ));
+    }
+
+    #[test]
+    fn management_auth_challenge_identifies_cpa() {
+        assert!(management_probe_identifies_cpa(
+            StatusCode::UNAUTHORIZED,
+            "check management secret-key"
+        ));
+        assert!(management_probe_identifies_cpa(
+            StatusCode::FORBIDDEN,
+            "check management secret-key"
+        ));
+    }
+
+    #[test]
+    fn management_files_payload_identifies_cpa() {
+        assert!(management_probe_identifies_cpa(
+            StatusCode::OK,
+            r#"{"files":[]}"#
+        ));
+    }
+
+    #[test]
+    fn health_response_requires_cpa_marker() {
+        assert!(!health_response_identifies_cpa(StatusCode::OK, "ok"));
+        assert!(health_response_identifies_cpa(
+            StatusCode::OK,
+            r#"{"name":"CLIProxyAPI","status":"ok"}"#
+        ));
     }
 }
 
@@ -261,6 +350,7 @@ pub fn run() {
             }
             app.manage(cpa_state.clone());
             app.manage(log_stream::new_log_buffer());
+            app.manage(commands::auth_files::AuthSessionState::default());
 
             tray::setup_tray(app.handle()).ok();
 
@@ -315,6 +405,7 @@ pub fn run() {
             commands::install::upgrade_via_brew,
             commands::install::external_update_instructions,
             commands::auth_files::list_auth_files,
+            commands::auth_files::create_auth_session,
             commands::auth_files::export_auth_files,
         ])
         .build(tauri::generate_context!())
