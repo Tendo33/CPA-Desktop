@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
-export interface NumberInputProps extends Omit<
+interface NumberInputProps extends Omit<
   InputHTMLAttributes<HTMLInputElement>,
   'value' | 'onChange'
 > {

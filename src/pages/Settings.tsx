@@ -312,19 +312,19 @@ export function SettingsPage() {
                   <Row
                     label={t.settings.healthPath}
                     hint={t.settings.healthPathHint}
-                    controlClassName="w-full sm:w-auto"
+                    controlClassName="w-auto"
                   >
                     <Input
                       aria-label={t.settings.healthPath}
                       value={settings.healthPath ?? '/health'}
                       onChange={(e) => updateSetting({ healthPath: e.target.value })}
-                      className="w-full sm:w-56"
+                      className="w-56"
                     />
                   </Row>
                   <Row
                     label={t.settings.mirrors}
                     hint={t.settings.mirrorsHint}
-                    controlClassName="w-full sm:w-auto"
+                    controlClassName="w-auto"
                   >
                     <Input
                       aria-label={t.settings.mirrors}
@@ -337,7 +337,7 @@ export function SettingsPage() {
                             .filter(Boolean),
                         })
                       }
-                      className="w-full sm:w-80"
+                      className="w-80"
                     />
                   </Row>
                 </>

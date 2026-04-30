@@ -74,9 +74,6 @@ CPA at runtime.
 
 ![Settings preview](assets/readme/settings.png)
 
-Run `node scripts/generate-assets.mjs` to refresh preview images at their exact
-dimensions.
-
 ## Code signing status
 
 | Platform | Status                  | What you'll see on first launch                              |

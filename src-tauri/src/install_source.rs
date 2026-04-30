@@ -213,7 +213,10 @@ mod tests {
         };
         let r = s.resolve(&ctx());
         assert_eq!(r.binary, PathBuf::from("/opt/homebrew/bin/cliproxyapi"));
-        assert_eq!(r.config, PathBuf::from("/opt/homebrew/etc/cliproxyapi.conf"));
+        assert_eq!(
+            r.config,
+            PathBuf::from("/opt/homebrew/etc/cliproxyapi.conf")
+        );
     }
 
     #[test]

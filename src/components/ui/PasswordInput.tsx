@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/stores/toast'
 import { useT } from '@/lib/i18n'
 
-export interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** When provided, renders a "regenerate" icon button next to the eye toggle. */
   onRegenerate?: () => void | Promise<void>
   /** Whether to show the copy button. Defaults to true. */

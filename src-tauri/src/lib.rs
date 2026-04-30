@@ -93,49 +93,6 @@ fn management_probe_identifies_cpa(status: reqwest::StatusCode, body: &str) -> b
     value.get("files").and_then(|v| v.as_array()).is_some()
 }
 
-#[cfg(test)]
-mod probe_tests {
-    use super::*;
-    use reqwest::StatusCode;
-
-    #[test]
-    fn arbitrary_404_does_not_identify_cpa() {
-        assert!(!management_probe_identifies_cpa(
-            StatusCode::NOT_FOUND,
-            "{}"
-        ));
-    }
-
-    #[test]
-    fn management_auth_challenge_identifies_cpa() {
-        assert!(management_probe_identifies_cpa(
-            StatusCode::UNAUTHORIZED,
-            "check management secret-key"
-        ));
-        assert!(management_probe_identifies_cpa(
-            StatusCode::FORBIDDEN,
-            "check management secret-key"
-        ));
-    }
-
-    #[test]
-    fn management_files_payload_identifies_cpa() {
-        assert!(management_probe_identifies_cpa(
-            StatusCode::OK,
-            r#"{"files":[]}"#
-        ));
-    }
-
-    #[test]
-    fn health_response_requires_cpa_marker() {
-        assert!(!health_response_identifies_cpa(StatusCode::OK, "ok"));
-        assert!(health_response_identifies_cpa(
-            StatusCode::OK,
-            r#"{"name":"CLIProxyAPI","status":"ok"}"#
-        ));
-    }
-}
-
 use tauri::Emitter;
 
 /// Background loop that monitors CPA after it reaches Running state.
@@ -275,7 +232,6 @@ pub(crate) fn spawn_health_monitor(app: tauri::AppHandle, state: SharedCpaState,
     });
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(
@@ -317,7 +273,6 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
@@ -373,7 +328,6 @@ pub fn run() {
             commands::cpa::get_cpa_status,
             commands::cpa::get_cpa_port,
             commands::cpa::check_cpa_running,
-            commands::cpa::cpa_binary_exists,
             commands::cpa::get_log_history,
             commands::cpa::clear_logs,
             commands::config::get_settings,
@@ -387,8 +341,6 @@ pub fn run() {
             commands::config::get_autolaunch_enabled,
             commands::config::set_autolaunch_enabled,
             commands::config::write_config_yaml_port,
-            commands::config::list_config_backups,
-            commands::config::restore_config_backup,
             commands::config::read_config_field,
             commands::config::write_config_field,
             commands::config::get_setup_status,
@@ -443,4 +395,47 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+    use reqwest::StatusCode;
+
+    #[test]
+    fn arbitrary_404_does_not_identify_cpa() {
+        assert!(!management_probe_identifies_cpa(
+            StatusCode::NOT_FOUND,
+            "{}"
+        ));
+    }
+
+    #[test]
+    fn management_auth_challenge_identifies_cpa() {
+        assert!(management_probe_identifies_cpa(
+            StatusCode::UNAUTHORIZED,
+            "check management secret-key"
+        ));
+        assert!(management_probe_identifies_cpa(
+            StatusCode::FORBIDDEN,
+            "check management secret-key"
+        ));
+    }
+
+    #[test]
+    fn management_files_payload_identifies_cpa() {
+        assert!(management_probe_identifies_cpa(
+            StatusCode::OK,
+            r#"{"files":[]}"#
+        ));
+    }
+
+    #[test]
+    fn health_response_requires_cpa_marker() {
+        assert!(!health_response_identifies_cpa(StatusCode::OK, "ok"));
+        assert!(health_response_identifies_cpa(
+            StatusCode::OK,
+            r#"{"name":"CLIProxyAPI","status":"ok"}"#
+        ));
+    }
 }

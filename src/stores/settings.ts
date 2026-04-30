@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type Theme = 'dark' | 'light' | 'system'
-export type Lang = 'en' | 'zh'
+type Theme = 'dark' | 'light' | 'system'
+type Lang = 'en' | 'zh'
 
 interface SettingsState {
   theme: Theme

@@ -17,7 +17,7 @@ const pill = cva(
   },
 )
 
-export type PillProps = HTMLAttributes<HTMLSpanElement> & VariantProps<typeof pill>
+type PillProps = HTMLAttributes<HTMLSpanElement> & VariantProps<typeof pill>
 
 export function Pill({ className, tone, ...props }: PillProps) {
   return <span className={cn(pill({ tone }), className)} {...props} />

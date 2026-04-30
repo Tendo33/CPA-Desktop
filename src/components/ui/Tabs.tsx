@@ -1,7 +1,7 @@
 import { KeyboardEvent, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
-export interface TabItem<T extends string> {
+interface TabItem<T extends string> {
   id: T
   label: string
 }

@@ -11,9 +11,9 @@ export type InstallSource =
   | { kind: 'systemPath'; binary: string; config: string }
   | { kind: 'custom'; binary: string; config: string; workingDir: string }
 
-export type UpdateStrategy = 'githubRelease' | 'brewUpgrade' | 'externalNotice'
+type UpdateStrategy = 'githubRelease' | 'brewUpgrade' | 'externalNotice'
 
-export interface ResolvedPaths {
+interface ResolvedPaths {
   binary: string
   config: string
   workingDir: string
@@ -26,7 +26,7 @@ export interface InstallSourceInfo {
   validationErrors: string[]
 }
 
-export interface DetectedInstall {
+interface DetectedInstall {
   source: InstallSource
   note: string | null
 }
@@ -43,7 +43,7 @@ export interface ExternalUpdateInstructions {
   link: string | null
 }
 
-export interface BrewUpgradeResult {
+interface BrewUpgradeResult {
   success: boolean
   log: string
 }
@@ -93,8 +93,6 @@ export const stopCpa = () => invoke<void>('stop_cpa')
 export const getCpaStatus = () => invoke<CpaStatus>('get_cpa_status')
 export const getCpaPort = () => invoke<number>('get_cpa_port')
 export const checkCpaRunning = () => invoke<boolean>('check_cpa_running')
-export const cpaBinaryExists = () => invoke<boolean>('cpa_binary_exists')
-
 // Logs
 export const getLogHistory = () => invoke<LogLine[]>('get_log_history')
 export const clearLogs = () => invoke<void>('clear_logs')
@@ -109,7 +107,7 @@ export interface SetupStatus {
   installSourceKind: 'managed' | 'homebrew' | 'systemPath' | 'custom'
 }
 
-export interface InitializedCredentials {
+interface InitializedCredentials {
   secretKey: string
   apiKeys: string[]
 }
@@ -131,9 +129,6 @@ export const readConfigField = <T = unknown>(path: string) =>
   invoke<T | null>('read_config_field', { path })
 export const writeConfigField = (path: string, value: unknown) =>
   invoke<void>('write_config_field', { path, value })
-export const listConfigBackups = () => invoke<string[]>('list_config_backups')
-export const restoreConfigBackup = (name: string) =>
-  invoke<string>('restore_config_backup', { name })
 export const openDataDir = () => invoke<void>('open_data_dir')
 export const getPortFromYaml = () => invoke<number>('get_port_from_yaml')
 export const getAutolaunchEnabled = () => invoke<boolean>('get_autolaunch_enabled')
@@ -207,7 +202,7 @@ export interface AuthFileInfo {
   planType: string
 }
 
-export interface ExportFailure {
+interface ExportFailure {
   sourceName: string
   reason: string
 }

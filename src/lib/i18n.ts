@@ -1,8 +1,9 @@
 import { useSettingsStore } from '@/stores/settings'
-import { translations, type Translations } from '@/locales'
+import { translations } from '@/locales'
 
 export { translations }
-export type { Translations }
+
+type Translations = typeof translations.en
 
 export function useT(): Translations {
   const lang = useSettingsStore((s) => s.lang)

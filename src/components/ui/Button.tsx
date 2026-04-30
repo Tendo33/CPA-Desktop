@@ -23,7 +23,7 @@ const button = cva(
   },
 )
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => (

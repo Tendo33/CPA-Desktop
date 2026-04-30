@@ -12,24 +12,8 @@ jobs:
   # already be green on the commit being tagged. If you ever need to
   # re-validate at release time, dispatch the CI workflow manually.
 
-  # ── Prepare the single app icon before building ──────────────────────────
-  gen-icons:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install pillow
-      - run: python3 scripts/gen_icons.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: icons
-          path: src-tauri/icons/
-
   # ── Build all platforms ───────────────────────────────────────────────────
   build:
-    needs: gen-icons
     permissions:
       contents: write
     strategy:
@@ -77,12 +61,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download icons (from gen-icons job)
-        uses: actions/download-artifact@v4
-        with:
-          name: icons
-          path: src-tauri/icons/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

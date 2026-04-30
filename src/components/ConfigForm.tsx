@@ -177,21 +177,21 @@ export function ConfigForm() {
       <Row
         label={t.configForm.secretKey}
         hint={t.configForm.secretKeyHint}
-        controlClassName="w-full sm:w-auto"
+        controlClassName="w-auto"
       >
         <PasswordInput
           aria-label={t.configForm.secretKey}
           value={fields.secretKey}
           onChange={(e) => update('secretKey', e.target.value)}
           onRegenerate={handleRegenerateSecret}
-          wrapperClassName="w-full sm:w-80"
+          wrapperClassName="w-80"
           placeholder={t.configForm.secretPlaceholder}
         />
       </Row>
       <Row
         label={t.configForm.clientApiKeys}
         hint={t.configForm.clientApiKeysHint}
-        controlClassName="w-full sm:w-auto"
+        controlClassName="w-[420px] max-w-full"
       >
         <ApiKeyList value={fields.apiKeys} onChange={(v) => update('apiKeys', v)} />
       </Row>

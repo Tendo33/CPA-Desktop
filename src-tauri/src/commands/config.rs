@@ -277,19 +277,6 @@ fn write_config_yaml_with_backup(
     app_config::atomic_write(config_path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
-fn restore_config_backup_file(
-    backup_path: &Path,
-    config_path: &Path,
-    backups_dir: &Path,
-) -> Result<String, String> {
-    let content = std::fs::read_to_string(backup_path).map_err(|e| e.to_string())?;
-    serde_yaml::from_str::<serde_yaml::Value>(&content)
-        .map_err(|e| format!("Invalid YAML: {e}"))?;
-    backup_current_config(config_path, backups_dir)?;
-    app_config::atomic_write(config_path, content.as_bytes()).map_err(|e| e.to_string())?;
-    Ok(content)
-}
-
 fn prune_backups(dir: &std::path::Path, keep: usize) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -302,36 +289,6 @@ fn prune_backups(dir: &std::path::Path, keep: usize) {
         }
         files.remove(0);
     }
-}
-
-#[tauri::command]
-pub fn list_config_backups(app: AppHandle) -> Result<Vec<String>, String> {
-    let dir = app_config::backups_dir(&app);
-    if !dir.exists() {
-        return Ok(vec![]);
-    }
-    let mut names: Vec<(std::time::SystemTime, String)> = std::fs::read_dir(&dir)
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let mtime = e.metadata().ok()?.modified().ok()?;
-            let name = e.file_name().to_string_lossy().to_string();
-            Some((mtime, name))
-        })
-        .collect();
-    names.sort_by_key(|n| std::cmp::Reverse(n.0));
-    Ok(names.into_iter().map(|(_, n)| n).collect())
-}
-
-#[tauri::command]
-pub fn restore_config_backup(app: AppHandle, name: String) -> Result<String, String> {
-    let dir = app_config::backups_dir(&app);
-    let src = dir.join(&name);
-    if !src.exists() {
-        return Err(format!("backup '{name}' not found"));
-    }
-    let dst = app_config::config_yaml_path(&app);
-    restore_config_backup_file(&src, &dst, &dir)
 }
 
 fn set_path(
@@ -579,50 +536,5 @@ mod tests {
             std::fs::read_to_string(backup.path()).unwrap(),
             "port: 8317\n"
         );
-    }
-
-    #[test]
-    fn restore_config_backup_rejects_invalid_yaml_without_overwriting_current() {
-        let tmp = tempfile::tempdir().unwrap();
-        let config_path = tmp.path().join("config.yaml");
-        let backups_dir = tmp.path().join("backups");
-        std::fs::create_dir_all(&backups_dir).unwrap();
-        std::fs::write(&config_path, "port: 8317\n").unwrap();
-        let broken_backup = backups_dir.join("config.yaml.broken");
-        std::fs::write(&broken_backup, "port: [\n").unwrap();
-
-        let err = restore_config_backup_file(&broken_backup, &config_path, &backups_dir)
-            .expect_err("invalid YAML backup must be rejected");
-
-        assert!(err.contains("Invalid YAML"));
-        assert_eq!(
-            std::fs::read_to_string(&config_path).unwrap(),
-            "port: 8317\n"
-        );
-    }
-
-    #[test]
-    fn restore_config_backup_writes_atomically_and_snapshots_current() {
-        let tmp = tempfile::tempdir().unwrap();
-        let config_path = tmp.path().join("config.yaml");
-        let backups_dir = tmp.path().join("backups");
-        std::fs::create_dir_all(&backups_dir).unwrap();
-        std::fs::write(&config_path, "port: 8317\n").unwrap();
-        let backup = backups_dir.join("config.yaml.good");
-        std::fs::write(&backup, "port: 8319\n").unwrap();
-
-        let restored = restore_config_backup_file(&backup, &config_path, &backups_dir).unwrap();
-
-        assert_eq!(restored, "port: 8319\n");
-        assert_eq!(
-            std::fs::read_to_string(&config_path).unwrap(),
-            "port: 8319\n"
-        );
-        let snapshot_count = std::fs::read_dir(&backups_dir)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| std::fs::read_to_string(e.path()).unwrap_or_default() == "port: 8317\n")
-            .count();
-        assert_eq!(snapshot_count, 1);
     }
 }

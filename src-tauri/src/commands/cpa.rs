@@ -31,11 +31,6 @@ pub async fn check_cpa_running(state: State<'_, SharedCpaState>) -> Result<bool,
 }
 
 #[tauri::command]
-pub fn cpa_binary_exists(app: AppHandle) -> bool {
-    app_config::cpa_binary_path(&app).exists()
-}
-
-#[tauri::command]
 pub fn get_log_history(buf: State<'_, LogBuffer>) -> Vec<LogLine> {
     crate::log_stream::get_all(&buf)
 }

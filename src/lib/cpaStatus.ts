@@ -9,5 +9,3 @@ export const errorOf = (s: CpaStatus): string | null => (s.kind === 'Error' ? s.
 
 export const IDLE: CpaStatus = { kind: 'Idle' }
 export const RUNNING: CpaStatus = { kind: 'Running' }
-export const STARTING: CpaStatus = { kind: 'Starting' }
-export const STOPPED: CpaStatus = { kind: 'Stopped' }

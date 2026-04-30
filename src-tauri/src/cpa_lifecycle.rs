@@ -145,10 +145,3 @@ pub fn stop(app: &AppHandle) {
         let _ = app.emit("cpa:status", &CpaStatus::Stopped);
     }
 }
-
-// Silence unused-import warning when `kill_cpa` isn't reached on a code path.
-#[cfg(test)]
-#[allow(dead_code)]
-fn _force_use_kill_cpa(s: &SharedCpaState) {
-    kill_cpa(s);
-}
