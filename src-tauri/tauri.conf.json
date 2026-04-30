@@ -36,16 +36,12 @@
     "copyright": "Copyright © 2026 Jinfeng Sun",
     "shortDescription": "Desktop manager for CLIProxyAPI",
     "longDescription": "CPA Desktop is a native desktop manager for CLIProxyAPI — auto-download, silent background start, real-time logs, and one-click updates.",
-    "icon": [
-      "icons/icon.png"
-    ]
+    "icon": ["icons/icon.icns", "icons/icon.png"]
   },
   "plugins": {
     "updater": {
       "active": true,
-      "endpoints": [
-        "https://github.com/Tendo33/CPA-Desktop/releases/latest/download/latest.json"
-      ],
+      "endpoints": ["https://github.com/Tendo33/CPA-Desktop/releases/latest/download/latest.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyMzU0RDVGODYwREQwMTYKUldRVzBBMkdYMDAxd29SaVkrUjIrOTd5S0JwOW81NTNiZVRDVnhVYUllaXpXeXd3Y282ZVlWNEsK"
     }
   }

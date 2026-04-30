@@ -64,7 +64,7 @@ export function Logs() {
   return (
     <div className="flex flex-col h-full bg-bg">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-2.5 h-9 bg-surface border-b border-border-sub flex-shrink-0">
+      <div className="flex items-center gap-2 px-2.5 h-9 bg-surface border-b border-border-sub shrink-0">
         <Input
           placeholder={t.logs.filter}
           value={search}
@@ -87,7 +87,7 @@ export function Logs() {
         />
 
         <label className="flex items-center gap-1.5 cursor-pointer text-xs">
-          <Toggle checked={autoScroll} onChange={setAutoScroll} ariaLabel="Auto-scroll" />
+          <Toggle checked={autoScroll} onChange={setAutoScroll} ariaLabel={t.logs.autoScroll} />
           <span
             className="select-none"
             style={{ color: autoScroll ? 'var(--c-text-2)' : 'var(--c-text-3)' }}
@@ -119,12 +119,10 @@ export function Logs() {
           </div>
           <div className="flex flex-col gap-1.5 max-w-[280px]">
             <p className="text-[15px] font-semibold text-text-1">
-              {!cpaRunning ? 'CPA is not running' : 'No output yet'}
+              {!cpaRunning ? t.logs.notRunningTitle : t.logs.noOutputTitle}
             </p>
             <p className="text-[13px] text-text-3 leading-relaxed">
-              {!cpaRunning
-                ? 'Start CPA from the Dashboard to see live logs here.'
-                : 'Waiting for the CPA process to write to stdout or stderr.'}
+              {!cpaRunning ? t.logs.notRunningBody : t.logs.noOutputBody}
             </p>
           </div>
         </div>
@@ -134,11 +132,8 @@ export function Logs() {
             <span className="text-xl text-text-3">⌕</span>
           </div>
           <div className="flex flex-col gap-1.5 max-w-[280px]">
-            <p className="text-[15px] font-semibold text-text-1">No matches found</p>
-            <p className="text-[13px] text-text-3 leading-relaxed">
-              No logs match your current search and level filters. Try clearing them to see all
-              output.
-            </p>
+            <p className="text-[15px] font-semibold text-text-1">{t.logs.noMatchesTitle}</p>
+            <p className="text-[13px] text-text-3 leading-relaxed">{t.logs.noMatchesBody}</p>
           </div>
           <button
             onClick={() => {
@@ -147,7 +142,7 @@ export function Logs() {
             }}
             className="mt-2 text-[12px] font-medium text-accent hover:text-text-1 transition-colors cursor-pointer bg-transparent border-none"
           >
-            Clear filters
+            {t.logs.clearFilters}
           </button>
         </div>
       ) : (

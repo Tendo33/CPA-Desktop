@@ -11,6 +11,7 @@ import {
 import { useSettingsStore } from '@/stores/settings'
 import { useT } from '@/lib/i18n'
 import { useRef } from 'react'
+import appIconSmall from '@/assets/app-icon-small.png'
 
 export type Page = 'dashboard' | 'logs' | 'authFiles' | 'settings' | 'about'
 
@@ -74,17 +75,16 @@ export function Sidebar({ current, onChange }: Props) {
           flexShrink: 0,
         }}
       >
-        <span
+        <img
+          src={appIconSmall}
+          alt="CPA Desktop"
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.18em',
-            color: 'var(--c-accent)',
-            lineHeight: 1,
+            width: 28,
+            height: 28,
+            borderRadius: 7,
+            display: 'block',
           }}
-        >
-          CPA
-        </span>
+        />
       </div>
 
       {/* Divider */}

@@ -139,18 +139,18 @@ export function SettingsPage() {
   }
 
   const onCheckUpdate = async () => {
-    setUpdateMsg('Checking…')
+    setUpdateMsg(t.appUpdate.checking)
     try {
       const u = await checkAppUpdate()
       if (!u) {
-        setUpdateMsg('Up to date')
+        setUpdateMsg(t.appUpdate.upToDate)
         return
       }
-      if (confirm(`Update ${u.version} available. Install now?`)) {
-        setUpdateMsg('Downloading…')
+      if (confirm(t.appUpdate.confirmInstall(u.version))) {
+        setUpdateMsg(t.appUpdate.downloading)
         await applyAppUpdate(u)
       } else {
-        setUpdateMsg(`v${u.version} available`)
+        setUpdateMsg(t.appUpdate.available(u.version))
       }
     } catch (e) {
       setUpdateMsg(String(e))

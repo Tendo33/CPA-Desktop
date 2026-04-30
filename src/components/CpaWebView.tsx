@@ -22,9 +22,17 @@ interface Props {
 const LABEL = 'cpa-content'
 const SIDEBAR_W = 56
 const STATUS_H = 28
+type NativeWindow = ReturnType<typeof getCurrentWindow>
 
-async function getLogicalSize() {
-  const win = getCurrentWindow()
+function getNativeWindow(): NativeWindow | null {
+  try {
+    return getCurrentWindow()
+  } catch {
+    return null
+  }
+}
+
+async function getLogicalSize(win: NativeWindow) {
   const size = await win.innerSize()
   const scale = await win.scaleFactor()
   return {
@@ -42,10 +50,11 @@ async function closeExisting() {
   }
 }
 
-async function spawnWebview(url: string): Promise<Webview> {
+async function spawnWebview(url: string): Promise<Webview | null> {
   await closeExisting()
-  const win = getCurrentWindow()
-  const { width, height } = await getLogicalSize()
+  const win = getNativeWindow()
+  if (!win) return null
+  const { width, height } = await getLogicalSize(win)
 
   return new Promise<Webview>((resolve, reject) => {
     const wv = new Webview(win, LABEL, {
@@ -76,6 +85,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
       const token = ++tokenRef.current
       spawnWebview(u)
         .then((wv) => {
+          if (!wv) return
           if (tokenRef.current !== token) {
             wv.close()
             return
@@ -122,7 +132,8 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
     }, [url, visible])
 
     useEffect(() => {
-      const win = getCurrentWindow()
+      const win = getNativeWindow()
+      if (!win) return
       let disposed = false
       let resizeUnlisten: (() => void) | null = null
       let focusUnlisten: (() => void) | null = null
@@ -131,7 +142,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
         .onResized(async () => {
           const wv = wvRef.current
           if (!wv) return
-          const { width, height } = await getLogicalSize()
+          const { width, height } = await getLogicalSize(win)
           await wv.setPosition(new LogicalPosition(SIDEBAR_W, 0))
           await wv.setSize(new LogicalSize(width, height))
         })

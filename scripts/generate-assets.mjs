@@ -113,14 +113,6 @@ function sizedSvg(svg, size) {
 }
 
 renderHtml(
-  'app-icon',
-  imagePage(appIconSvg, 1024, 1024, true),
-  1024,
-  1024,
-  path.join(brandDir, 'cpa-desktop-icon.png'),
-  { transparent: true },
-)
-renderHtml(
   'favicon',
   imagePage(sizedSvg(appIconSvg, 32), 32, 32, true),
   32,
@@ -496,15 +488,9 @@ renderHtml(
   path.join(readmeDir, 'settings.png'),
 )
 
-const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-execFileSync(npmCmd, ['run', 'tauri', 'icon', '--', 'assets/brand/cpa-desktop-icon.png'], {
-  cwd: root,
-  stdio: 'inherit',
-})
-
 if (existsSync(tauriIconDir)) {
   for (const name of readdirSync(tauriIconDir)) {
-    if (name !== 'icon.png') {
+    if (name !== 'icon.png' && name !== 'icon.icns') {
       rmSync(path.join(tauriIconDir, name), { recursive: true, force: true })
     }
   }

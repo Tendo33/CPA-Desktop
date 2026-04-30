@@ -6,7 +6,7 @@
 //! resolution that the rest of the app depends on.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -75,6 +75,27 @@ pub fn binary_filename() -> &'static str {
     }
 }
 
+pub fn homebrew_binary_filename() -> &'static str {
+    "cliproxyapi"
+}
+
+fn homebrew_root_from_prefix(prefix: &Path) -> PathBuf {
+    if prefix.file_name().and_then(|s| s.to_str()) == Some("cliproxyapi")
+        && prefix
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            == Some("opt")
+    {
+        return prefix
+            .parent()
+            .and_then(|p| p.parent())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| prefix.to_path_buf());
+    }
+    prefix.to_path_buf()
+}
+
 impl InstallSource {
     pub fn resolve(&self, managed: &ManagedContext) -> ResolvedPaths {
         match self {
@@ -84,14 +105,15 @@ impl InstallSource {
                 working_dir: managed.data_dir.clone(),
             },
             InstallSource::Homebrew { prefix } => {
-                // We deliberately do NOT use `{prefix}/var/cliproxyapi` as
-                // the working directory: on Intel Macs `/usr/local` is
-                // root-owned and CPA would crash trying to write state
-                // files. Our app's internal data dir is always
-                // user-writable and survives brew uninstall/reinstall.
+                let brew_root = homebrew_root_from_prefix(prefix);
+                // We deliberately do NOT use Homebrew's var directory as the
+                // working directory: on Intel Macs `/usr/local` is root-owned
+                // and CPA would crash trying to write state files. Our app's
+                // internal data dir is always user-writable and survives brew
+                // uninstall/reinstall.
                 ResolvedPaths {
-                    binary: prefix.join("bin").join(binary_filename()),
-                    config: prefix.join("etc").join("cliproxyapi.conf"),
+                    binary: prefix.join("bin").join(homebrew_binary_filename()),
+                    config: brew_root.join("etc").join("cliproxyapi.conf"),
                     working_dir: managed.data_dir.clone(),
                 }
             }
@@ -168,10 +190,13 @@ mod tests {
     #[test]
     fn homebrew_paths_follow_brew_layout() {
         let s = InstallSource::Homebrew {
-            prefix: PathBuf::from("/opt/homebrew"),
+            prefix: PathBuf::from("/opt/homebrew/opt/cliproxyapi"),
         };
         let r = s.resolve(&ctx());
-        assert!(r.binary.starts_with("/opt/homebrew/bin"));
+        assert_eq!(
+            r.binary,
+            PathBuf::from("/opt/homebrew/opt/cliproxyapi/bin/cliproxyapi")
+        );
         assert_eq!(
             r.config,
             PathBuf::from("/opt/homebrew/etc/cliproxyapi.conf")
@@ -179,6 +204,16 @@ mod tests {
         // Working dir is our internal data dir, NOT brew's var/, so the
         // child process always has a writable cwd.
         assert_eq!(r.working_dir, PathBuf::from("/data/data"));
+    }
+
+    #[test]
+    fn homebrew_paths_still_support_global_brew_prefix() {
+        let s = InstallSource::Homebrew {
+            prefix: PathBuf::from("/opt/homebrew"),
+        };
+        let r = s.resolve(&ctx());
+        assert_eq!(r.binary, PathBuf::from("/opt/homebrew/bin/cliproxyapi"));
+        assert_eq!(r.config, PathBuf::from("/opt/homebrew/etc/cliproxyapi.conf"));
     }
 
     #[test]

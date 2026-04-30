@@ -135,14 +135,14 @@ describe('generated assets', () => {
     expect(svg).not.toContain('M724 512c0 119')
   })
 
-  test('app icon keeps transparent launcher corners', () => {
-    const icon = readPng('assets/brand/cpa-desktop-icon.png')
+  test('Tauri app icon keeps transparent launcher corners', () => {
+    const icon = readPng('src-tauri/icons/icon.png')
     expect(icon.colorType).toBe(6)
 
-    expect(pixelAt('assets/brand/cpa-desktop-icon.png', 0, 0).a).toBe(0)
-    expect(pixelAt('assets/brand/cpa-desktop-icon.png', 1023, 0).a).toBe(0)
-    expect(pixelAt('assets/brand/cpa-desktop-icon.png', 0, 1023).a).toBe(0)
-    expect(pixelAt('assets/brand/cpa-desktop-icon.png', 1023, 1023).a).toBe(0)
+    expect(pixelAt('src-tauri/icons/icon.png', 0, 0).a).toBe(0)
+    expect(pixelAt('src-tauri/icons/icon.png', icon.width - 1, 0).a).toBe(0)
+    expect(pixelAt('src-tauri/icons/icon.png', 0, icon.height - 1).a).toBe(0)
+    expect(pixelAt('src-tauri/icons/icon.png', icon.width - 1, icon.height - 1).a).toBe(0)
   })
 
   test('cross-platform icon has visible pixels on dark taskbars', () => {

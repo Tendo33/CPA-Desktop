@@ -11,6 +11,7 @@ import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
 import { useLogStore } from '@/stores/logs'
 import { useSettingsStore } from '@/stores/settings'
+import { useT } from '@/lib/i18n'
 import {
   applyAppUpdate,
   checkAppUpdate,
@@ -39,6 +40,7 @@ export default function App() {
   const unlistenRefs = useRef<UnlistenFn[]>([])
 
   const theme = useSettingsStore((s) => s.theme)
+  const t = useT()
 
   // Apply theme; honor 'system' by reading prefers-color-scheme
   useEffect(() => {
@@ -182,7 +184,7 @@ export default function App() {
               const granted = await notif.isPermissionGranted()
               if (granted) {
                 await notif.sendNotification({
-                  title: 'CPA Desktop update available',
+                  title: t.appUpdate.notificationTitle,
                   body: `v${u.version}`,
                 })
               }
@@ -198,7 +200,7 @@ export default function App() {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [ready])
+  }, [ready, t])
 
   useEffect(() => {
     if (!ready) return
@@ -207,7 +209,7 @@ export default function App() {
       try {
         const u = await checkAppUpdate()
         if (!u) return
-        if (confirm(`Update ${u.version} available. Install now?`)) {
+        if (confirm(t.appUpdate.confirmInstall(u.version))) {
           await applyAppUpdate(u)
         }
       } catch {
@@ -219,7 +221,7 @@ export default function App() {
     return () => {
       unlisten?.()
     }
-  }, [ready])
+  }, [ready, t])
 
   if (boot.kind === 'probing') {
     return (

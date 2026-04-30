@@ -319,6 +319,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_homebrew_accepts_formula_prefix_layout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let prefix = root.join("opt/cliproxyapi");
+        let bin = prefix.join("bin").join("cliproxyapi");
+        let cfg = root.join("etc/cliproxyapi.conf");
+        std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
+        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::write(&cfg, "port: 8317\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perm = std::fs::metadata(&bin).unwrap().permissions();
+            perm.set_mode(0o755);
+            std::fs::set_permissions(&bin, perm).unwrap();
+        }
+        let s = InstallSource::Homebrew { prefix };
+        let errs = validate(&s, Path::new("/managed"));
+        assert!(errs.is_empty(), "unexpected validation errors: {errs:?}");
+    }
+
+    #[test]
     fn detect_returns_managed_present_flag() {
         let tmp = tempfile::tempdir().unwrap();
         let stub = tmp.path().join(binary_filename());

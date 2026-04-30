@@ -20,6 +20,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { ArrowUpRight } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 import { Button, Modal } from '@/components/ui'
+import appIconSmall from '@/assets/app-icon-small.png'
 
 export function AboutPage() {
   const { status } = useCpaStore()
@@ -199,16 +200,16 @@ export function AboutPage() {
               marginBottom: 4,
             }}
           >
-            <span
+            <img
+              src={appIconSmall}
+              alt="CPA Desktop"
               style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: 'var(--c-accent)',
-                letterSpacing: '-0.02em',
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                display: 'block',
               }}
-            >
-              C
-            </span>
+            />
           </div>
 
           <div>

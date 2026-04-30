@@ -23,11 +23,11 @@ const tauriMocks = vi.hoisted(() => {
     onResized: vi.fn(),
     onFocusChanged: vi.fn(),
   }
-  return { win }
+  return { win, getCurrentWindow: vi.fn(() => win) }
 })
 
 vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: () => tauriMocks.win,
+  getCurrentWindow: tauriMocks.getCurrentWindow,
   LogicalPosition: class LogicalPosition {
     constructor(
       public x: number,
@@ -58,6 +58,7 @@ describe('CpaWebView window listener cleanup', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    tauriMocks.getCurrentWindow.mockReturnValue(tauriMocks.win)
     resizeDeferred = deferred<Unlisten>()
     focusDeferred = deferred<Unlisten>()
     tauriMocks.win.onResized.mockReturnValue(resizeDeferred.promise)
@@ -101,5 +102,15 @@ describe('CpaWebView window listener cleanup', () => {
 
     expect(resizeUnlisten).toHaveBeenCalledTimes(1)
     expect(focusUnlisten).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips native window listeners when the Tauri window is unavailable', () => {
+    tauriMocks.getCurrentWindow.mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'metadata')")
+    })
+
+    expect(() => render(<CpaWebView url="http://127.0.0.1:8317" visible={false} />)).not.toThrow()
+    expect(tauriMocks.win.onResized).not.toHaveBeenCalled()
+    expect(tauriMocks.win.onFocusChanged).not.toHaveBeenCalled()
   })
 })
