@@ -122,12 +122,7 @@ pub fn initialize_credentials(app: AppHandle) -> Result<InitializedCredentials, 
     // sources we never overwrite — return what's already there if present.
     app_config::ensure_config_yaml(&app)?;
     let path = app_config::config_yaml_path(&app);
-    let raw = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut doc: serde_yaml::Value = if raw.trim().is_empty() {
-        serde_yaml::Value::Mapping(Default::default())
-    } else {
-        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
-    };
+    let mut doc = config_doc_for_write(std::fs::read_to_string(&path))?;
 
     // Ensure remote-management.secret-key
     let secret_key = {
@@ -164,33 +159,21 @@ pub fn initialize_credentials(app: AppHandle) -> Result<InitializedCredentials, 
     let api_keys = {
         let map = doc.as_mapping_mut().unwrap();
         let ak_key = serde_yaml::Value::String("api-keys".into());
-        let needs_seed = match map.get(&ak_key) {
-            None => true,
-            Some(serde_yaml::Value::Sequence(seq)) => {
-                seq.is_empty()
-                    || seq.iter().any(|v| {
-                        v.as_str()
-                            .map(|s| s.trim().is_empty() || s.trim().starts_with("your-api-key"))
-                            .unwrap_or(true)
-                    })
-            }
-            _ => true,
-        };
-        if needs_seed {
+        let mut keys = retain_initialized_api_keys(map.get(&ak_key)).unwrap_or_default();
+        if keys.is_empty() {
             let new_key = generate_secret();
-            map.insert(
-                ak_key.clone(),
-                serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(new_key)]),
-            );
+            keys.push(new_key);
         }
-        map.get(&ak_key)
-            .and_then(|v| v.as_sequence())
-            .map(|seq| {
-                seq.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
+        map.insert(
+            ak_key.clone(),
+            serde_yaml::Value::Sequence(
+                keys.iter()
+                    .cloned()
+                    .map(serde_yaml::Value::String)
+                    .collect(),
+            ),
+        );
+        keys
     };
 
     let serialized = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
@@ -322,6 +305,38 @@ fn set_path(
     Ok(())
 }
 
+fn retain_initialized_api_keys(value: Option<&serde_yaml::Value>) -> Result<Vec<String>, String> {
+    let Some(value) = value else {
+        return Ok(vec![]);
+    };
+    let seq = value
+        .as_sequence()
+        .ok_or_else(|| "api-keys is not a sequence".to_string())?;
+    Ok(seq
+        .iter()
+        .filter_map(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && !s.starts_with("your-api-key"))
+        .map(|s| s.to_string())
+        .collect())
+}
+
+fn config_doc_for_write(read: Result<String, std::io::Error>) -> Result<serde_yaml::Value, String> {
+    match read {
+        Ok(raw) => {
+            if raw.trim().is_empty() {
+                Ok(serde_yaml::Value::Mapping(Default::default()))
+            } else {
+                serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            Ok(serde_yaml::Value::Mapping(Default::default()))
+        }
+        Err(err) => Err(err.to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn read_config_field(
     app: AppHandle,
@@ -349,12 +364,8 @@ pub fn write_config_field(
     path: String,
     value: serde_json::Value,
 ) -> Result<(), String> {
-    let raw = read_config_yaml(app.clone()).unwrap_or_default();
-    let mut doc: serde_yaml::Value = if raw.trim().is_empty() {
-        serde_yaml::Value::Mapping(Default::default())
-    } else {
-        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
-    };
+    let path_buf = app_config::config_yaml_path(&app);
+    let mut doc = config_doc_for_write(std::fs::read_to_string(&path_buf))?;
     set_path(&mut doc, &path, value)?;
     let out = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
     write_config_yaml(app, out)
@@ -363,12 +374,7 @@ pub fn write_config_field(
 #[tauri::command]
 pub fn write_config_yaml_port(app: AppHandle, port: u16) -> Result<(), String> {
     let path = app_config::config_yaml_path(&app);
-    let raw = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut value: serde_yaml::Value = if raw.trim().is_empty() {
-        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
-    } else {
-        serde_yaml::from_str(&raw).map_err(|e| format!("Invalid YAML: {e}"))?
-    };
+    let mut value = config_doc_for_write(std::fs::read_to_string(&path))?;
     if let Some(map) = value.as_mapping_mut() {
         map.insert(
             serde_yaml::Value::String("port".into()),
@@ -536,5 +542,33 @@ mod tests {
             std::fs::read_to_string(backup.path()).unwrap(),
             "port: 8317\n"
         );
+    }
+
+    #[test]
+    fn initialize_credentials_preserves_real_api_keys_when_placeholders_exist() {
+        let doc: serde_yaml::Value = serde_yaml::from_str(
+            "api-keys:\n  - real-key-abc\n  - your-api-key-1\n  - '   '\n  - real-key-def\n",
+        )
+        .unwrap();
+
+        let preserved = retain_initialized_api_keys(doc.get("api-keys")).unwrap();
+
+        assert_eq!(preserved, vec!["real-key-abc", "real-key-def"]);
+    }
+
+    #[test]
+    fn write_config_helpers_must_not_treat_read_errors_as_empty_config() {
+        let err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let doc = config_doc_for_write(Err(err));
+
+        assert!(doc.is_err(), "permission failures must not become empty config");
+    }
+
+    #[test]
+    fn write_config_helpers_allow_missing_files_to_start_empty() {
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "missing");
+        let doc = config_doc_for_write(Err(err)).unwrap();
+
+        assert!(doc.as_mapping().is_some());
     }
 }
