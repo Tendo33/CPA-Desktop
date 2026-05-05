@@ -24,7 +24,11 @@ export const useCpaStore = create<CpaStore>((set) => ({
       checkCpaRunning().catch(() => false),
     ])
     set({ status: reachable ? RUNNING : status, port, initialized: true })
-    const unlisten = await listen<CpaStatus>('cpa:status', (e) => set({ status: e.payload }))
-    return unlisten
+    const unlistenStatus = await listen<CpaStatus>('cpa:status', (e) => set({ status: e.payload }))
+    const unlistenPort = await listen<number>('cpa:port', (e) => set({ port: e.payload }))
+    return () => {
+      unlistenStatus()
+      unlistenPort()
+    }
   },
 }))

@@ -303,10 +303,22 @@ pub fn read_port_from_yaml(app: &tauri::AppHandle) -> Result<u16, String> {
 pub fn read_port_from_path(path: &Path) -> Result<u16, String> {
     let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let val: serde_yaml::Value = serde_yaml::from_str(&content).map_err(|e| e.to_string())?;
-    val.get("port")
-        .and_then(|v| v.as_u64())
-        .map(|p| p as u16)
-        .ok_or_else(|| "port not found in config.yaml".into())
+    parse_port_value(&val)
+}
+
+pub fn parse_port_value(doc: &serde_yaml::Value) -> Result<u16, String> {
+    let raw = doc
+        .get("port")
+        .ok_or_else(|| "port not found in config.yaml".to_string())?;
+    let n = raw
+        .as_u64()
+        .ok_or_else(|| "config.yaml has no numeric `port` field".to_string())?;
+    let port =
+        u16::try_from(n).map_err(|_| format!("port {n} is not a valid TCP port (1-65535)"))?;
+    if port == 0 {
+        return Err("port 0 is not a valid TCP port (1-65535)".into());
+    }
+    Ok(port)
 }
 
 /// Bootstrap config.yaml from embedded example if not present.
@@ -335,10 +347,7 @@ mod tests {
 
     fn parse_port(yaml: &str) -> Result<u16, String> {
         let val: serde_yaml::Value = serde_yaml::from_str(yaml).map_err(|e| e.to_string())?;
-        val.get("port")
-            .and_then(|v| v.as_u64())
-            .map(|p| p as u16)
-            .ok_or_else(|| "port not found".to_string())
+        parse_port_value(&val)
     }
 
     #[test]
@@ -354,6 +363,18 @@ mod tests {
     #[test]
     fn rejects_string_port() {
         assert!(parse_port("port: \"abc\"\n").is_err());
+    }
+
+    #[test]
+    fn read_port_from_path_rejects_zero_and_overflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("config.yaml");
+
+        std::fs::write(&path, "port: 0\n").unwrap();
+        assert!(read_port_from_path(&path).is_err());
+
+        std::fs::write(&path, "port: 70000\n").unwrap();
+        assert!(read_port_from_path(&path).is_err());
     }
 
     #[test]

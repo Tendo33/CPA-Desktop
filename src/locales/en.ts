@@ -204,6 +204,9 @@ export const en = {
   },
   bootProbe: 'Probing CPA install…',
   mgmtUnavailable: {
+    titleDown: 'Management API is unreachable',
+    bodyDown:
+      'CPA is marked as running, but the management API did not respond. Check the logs, confirm the port, or restart CPA.',
     titleNoKey: 'Management API is disabled',
     bodyNoKey:
       'The management secret key is empty, so all /v0/management routes return 404. Generate one in Settings to use the panel.',

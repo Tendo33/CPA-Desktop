@@ -6,8 +6,8 @@ import {
   initializeCredentials,
   openLogsFolder,
   saveSettings,
+  setCpaPort,
   startCpa,
-  writeConfigYamlPort,
   type AppSettings,
   type SetupStatus,
 } from '@/lib/tauri'
@@ -83,8 +83,8 @@ export function SetupWizard({ initial, onComplete }: Props) {
       // Persist port to both app settings and config.yaml.
       const current = settings ?? (await getSettings())
       const next = { ...current, port, autoStart }
+      await setCpaPort(port)
       await saveSettings(next)
-      await writeConfigYamlPort(port)
       // Generate / read secret-key + api-keys atomically and stamp into yaml.
       const creds = await initializeCredentials()
       setCredentials(creds)

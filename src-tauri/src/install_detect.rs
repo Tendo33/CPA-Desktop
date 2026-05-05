@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::install_source::{binary_filename, InstallSource};
+use crate::install_source::{binary_filename, homebrew_binary_filename, InstallSource};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -78,15 +78,18 @@ fn run_capturing(program: &str, args: &[&str], timeout: Duration) -> Result<Stri
 ///
 /// Strategy:
 /// 1. `brew --prefix cliproxyapi` — succeeds only if the formula is installed.
-/// 2. Verify the binary exists at `<prefix>/bin/cli-proxy-api`.
+/// 2. Verify the binary exists at `<prefix>/bin/cliproxyapi`, with the
+///    historical `cli-proxy-api` filename as a compatibility fallback.
 pub fn detect_homebrew() -> Option<DetectedInstall> {
     if cfg!(target_os = "windows") {
         return None;
     }
     let prefix = run_capturing("brew", &["--prefix", "cliproxyapi"], PROBE_TIMEOUT).ok()?;
     let prefix = PathBuf::from(prefix);
-    let bin = prefix.join("bin").join(binary_filename());
-    if !bin.exists() {
+    if !homebrew_binary_candidates(&prefix)
+        .iter()
+        .any(|p| p.exists())
+    {
         return None;
     }
     Some(DetectedInstall {
@@ -95,6 +98,14 @@ pub fn detect_homebrew() -> Option<DetectedInstall> {
         },
         note: Some(format!("brew prefix: {}", prefix.display())),
     })
+}
+
+fn homebrew_binary_candidates(prefix: &Path) -> Vec<PathBuf> {
+    let bin_dir = prefix.join("bin");
+    vec![
+        bin_dir.join(homebrew_binary_filename()),
+        bin_dir.join(binary_filename()),
+    ]
 }
 
 /// Look for `cli-proxy-api` on `$PATH` (system package / install script).
@@ -227,8 +238,8 @@ pub fn validate(source: &InstallSource, managed_binary: &Path) -> Vec<String> {
         match std::fs::read_to_string(&resolved.config) {
             Ok(raw) => match serde_yaml::from_str::<serde_yaml::Value>(&raw) {
                 Ok(val) => {
-                    if val.get("port").and_then(|v| v.as_u64()).is_none() {
-                        errs.push("config.yaml has no numeric `port` field".into());
+                    if let Err(e) = crate::app_config::parse_port_value(&val) {
+                        errs.push(e);
                     }
                 }
                 Err(e) => errs.push(format!("config.yaml is not valid YAML: {e}")),
@@ -315,7 +326,32 @@ mod tests {
             config: cfg,
         };
         let errs = validate(&s, Path::new("/whatever"));
-        assert!(errs.iter().any(|e| e.contains("no numeric `port`")));
+        assert!(errs.iter().any(|e| e.contains("port not found")));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_port() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("cli-proxy-api");
+        let cfg = tmp.path().join("config.yaml");
+        std::fs::write(&bin, "stub").unwrap();
+        std::fs::write(&cfg, "port: 70000\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perm = std::fs::metadata(&bin).unwrap().permissions();
+            perm.set_mode(0o755);
+            std::fs::set_permissions(&bin, perm).unwrap();
+        }
+        let s = InstallSource::SystemPath {
+            binary: bin,
+            config: cfg,
+        };
+        let errs = validate(&s, Path::new("/whatever"));
+        assert!(
+            errs.iter().any(|e| e.contains("valid TCP port")),
+            "unexpected validation errors: {errs:?}"
+        );
     }
 
     #[test]
@@ -339,6 +375,14 @@ mod tests {
         let s = InstallSource::Homebrew { prefix };
         let errs = validate(&s, Path::new("/managed"));
         assert!(errs.is_empty(), "unexpected validation errors: {errs:?}");
+    }
+
+    #[test]
+    fn homebrew_detection_candidates_include_new_and_legacy_binary_names() {
+        let prefix = PathBuf::from("/opt/homebrew/opt/cliproxyapi");
+        let candidates = homebrew_binary_candidates(&prefix);
+        assert_eq!(candidates[0], prefix.join("bin").join("cliproxyapi"));
+        assert_eq!(candidates[1], prefix.join("bin").join("cli-proxy-api"));
     }
 
     #[test]

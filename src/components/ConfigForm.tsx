@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { readConfigField, writeConfigField, generateSecret } from '@/lib/tauri'
+import { readConfigField, writeConfigField, generateSecret, setCpaPort } from '@/lib/tauri'
 import {
   Row,
   NumberInput,
@@ -114,7 +114,11 @@ export function ConfigForm() {
     debounceRef.current[path] = setTimeout(async () => {
       writesInFlight.current += 1
       try {
-        await writeConfigField(path, value)
+        if (path === PATHS.port) {
+          await setCpaPort(Number(value))
+        } else {
+          await writeConfigField(path, value)
+        }
         if (requiresRestart) notifyDirty({ needsRestart: true })
         flashSavedOnce()
       } catch (e) {

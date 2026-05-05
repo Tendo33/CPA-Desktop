@@ -17,7 +17,6 @@ import { toast } from '@/stores/toast'
 const PLAN_OPTIONS = ['all', 'free', 'team', 'plus', 'pro', 'enterprise', 'edu', 'unknown'] as const
 type PlanFilter = (typeof PLAN_OPTIONS)[number]
 
-const LS_PASSWORD = 'cpa.authFiles.password'
 const LS_CONCURRENCY = 'cpa.authFiles.concurrency'
 const LS_TYPE = 'cpa.authFiles.type'
 const LS_PLAN = 'cpa.authFiles.plan'
@@ -52,7 +51,7 @@ export function AuthFilesPage() {
   const cpaRunning = isRunning(status)
   const t = useT()
 
-  const [password, setPassword] = useState(() => localStorage.getItem(LS_PASSWORD) ?? '')
+  const [password, setPassword] = useState('')
   const [concurrency, setConcurrency] = useState(
     () => Number(localStorage.getItem(LS_CONCURRENCY)) || 5,
   )
@@ -76,9 +75,6 @@ export function AuthFilesPage() {
 
   const createSession = async () => createAuthSession(password)
 
-  useEffect(() => {
-    localStorage.setItem(LS_PASSWORD, password)
-  }, [password])
   useEffect(() => {
     localStorage.setItem(LS_CONCURRENCY, String(concurrency))
   }, [concurrency])

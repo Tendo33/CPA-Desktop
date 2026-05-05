@@ -81,9 +81,6 @@ fn health_response_identifies_cpa(status: reqwest::StatusCode, body: &str) -> bo
 }
 
 fn management_probe_identifies_cpa(status: reqwest::StatusCode, body: &str) -> bool {
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return true;
-    }
     if !status.is_success() {
         return false;
     }
@@ -340,7 +337,7 @@ pub fn run() {
             commands::config::get_port_from_yaml,
             commands::config::get_autolaunch_enabled,
             commands::config::set_autolaunch_enabled,
-            commands::config::write_config_yaml_port,
+            commands::config::set_cpa_port,
             commands::config::read_config_field,
             commands::config::write_config_field,
             commands::config::get_setup_status,
@@ -411,12 +408,12 @@ mod probe_tests {
     }
 
     #[test]
-    fn management_auth_challenge_identifies_cpa() {
-        assert!(management_probe_identifies_cpa(
+    fn management_auth_challenge_does_not_identify_cpa_by_itself() {
+        assert!(!management_probe_identifies_cpa(
             StatusCode::UNAUTHORIZED,
             "check management secret-key"
         ));
-        assert!(management_probe_identifies_cpa(
+        assert!(!management_probe_identifies_cpa(
             StatusCode::FORBIDDEN,
             "check management secret-key"
         ));

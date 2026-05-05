@@ -111,12 +111,7 @@ export function AboutPage() {
     try {
       if (status.kind === 'Running') await stopCpa()
       const mirrors = (await getSettings().catch(() => null))?.mirrors
-      await downloadCpaUpdate(
-        update.downloadUrl,
-        update.latestVersion,
-        mirrors,
-        update.expectedSha256 ?? null,
-      )
+      await downloadCpaUpdate(update.latestVersion, mirrors)
     } catch (e) {
       setError(String(e))
       setDownloading(false)
