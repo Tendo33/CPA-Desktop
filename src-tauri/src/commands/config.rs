@@ -3,7 +3,7 @@ use crate::cpa_manager::SharedCpaState;
 use base64::Engine;
 use serde::Serialize;
 use std::path::Path;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_autostart::ManagerExt;
 
 /// Snapshot of "is the user ready to actually use CPA?" — the single source
@@ -196,14 +196,43 @@ pub fn save_settings_cmd(
     state: State<'_, SharedCpaState>,
     settings: AppSettings,
 ) -> Result<(), String> {
-    // Update the live port in the running CPA state
+    validate_port(settings.port)?;
+    app_config::save_settings(&app, &settings)?;
+    // Update the live port in the running CPA state.
     state.lock().unwrap().port = settings.port;
-    app_config::save_settings(&app, &settings)
+    let _ = app.emit("cpa:port", settings.port);
+    Ok(())
 }
 
 #[tauri::command]
 pub fn get_port_from_yaml(app: AppHandle) -> Result<u16, String> {
     app_config::read_port_from_yaml(&app)
+}
+
+#[tauri::command]
+pub fn set_cpa_port(
+    app: AppHandle,
+    state: State<'_, SharedCpaState>,
+    port: u16,
+) -> Result<(), String> {
+    validate_port(port)?;
+    write_config_yaml_port(app.clone(), port)?;
+
+    let mut settings = app_config::load_settings(&app);
+    settings.port = port;
+    app_config::save_settings(&app, &settings)?;
+
+    state.lock().unwrap().port = port;
+    app.emit("cpa:port", port).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn validate_port(port: u16) -> Result<(), String> {
+    if port == 0 {
+        Err("port 0 is not a valid TCP port (1-65535)".into())
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -373,6 +402,7 @@ pub fn write_config_field(
 
 #[tauri::command]
 pub fn write_config_yaml_port(app: AppHandle, port: u16) -> Result<(), String> {
+    validate_port(port)?;
     let path = app_config::config_yaml_path(&app);
     let mut value = config_doc_for_write(std::fs::read_to_string(&path))?;
     if let Some(map) = value.as_mapping_mut() {

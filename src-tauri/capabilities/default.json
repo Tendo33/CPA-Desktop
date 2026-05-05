@@ -29,15 +29,13 @@
       "allow": [{ "path": "$APPDATA/**" }, { "path": "$APPLOG/**" }]
     },
     "notification:default",
-    "http:default",
-    "opener:default",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "window-state:default",
     "global-shortcut:default",
     "updater:default",
-    "process:default",
+    "process:allow-restart",
     "dialog:allow-save"
   ]
 }

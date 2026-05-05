@@ -10,6 +10,7 @@ import {
   getPortFromYaml,
   getAutolaunchEnabled,
   setAutolaunchEnabled,
+  setCpaPort,
   checkAppUpdate,
   applyAppUpdate,
   type AppSettings,
@@ -29,7 +30,7 @@ const MonacoEditor = lazy(() =>
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
-  const { status } = useCpaStore()
+  const { status, port: livePort, initialized: cpaStoreInitialized } = useCpaStore()
   const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [yaml, setYaml] = useState('')
@@ -42,6 +43,12 @@ export function SettingsPage() {
   const [needsRestart, setNeedsRestart] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const theme = useSettingsStore((s) => s.theme)
+  // Debounce text/number inputs so we don't atomic_write on every keystroke
+  // (each save triggers an fsync; chained writes would visibly stutter).
+  // Toggles bypass the debounce because they're discrete and the user
+  // expects immediate feedback ("did the toggle take?").
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSave = useRef<AppSettings | null>(null)
 
   useEffect(() => {
     const onDirty = (e: Event) => {
@@ -65,6 +72,17 @@ export function SettingsPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!cpaStoreInitialized) return
+    setSettings((current) => {
+      if (!current || current.port === livePort) return current
+      const next = { ...current, port: livePort }
+      if (pendingSave.current) pendingSave.current = { ...pendingSave.current, port: livePort }
+      return next
+    })
+    setYamlPort(livePort)
+  }, [cpaStoreInitialized, livePort, settings?.port])
+
   const flash = (m: string) => {
     setMsg(m)
     setTimeout(() => setMsg(''), 2500)
@@ -79,13 +97,6 @@ export function SettingsPage() {
       flash(`Error: ${e}`)
     }
   }
-
-  // Debounce text/number inputs so we don't atomic_write on every keystroke
-  // (each save triggers an fsync; chained writes would visibly stutter).
-  // Toggles bypass the debounce because they're discrete and the user
-  // expects immediate feedback ("did the toggle take?").
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingSave = useRef<AppSettings | null>(null)
 
   useEffect(() => {
     return () => {
@@ -127,6 +138,18 @@ export function SettingsPage() {
       saveTimer.current = null
       void flushSave()
     }, 400)
+  }
+
+  const updatePort = (port: number) => {
+    if (!settings) return
+    const next = { ...settings, port }
+    setSettings(next)
+    setYamlPort(port)
+    setNeedsRestart(true)
+    if (pendingSave.current) {
+      pendingSave.current = { ...pendingSave.current, port }
+    }
+    void setCpaPort(port).catch((e) => flash(String(e)))
   }
 
   const handleSaveYaml = async () => {
@@ -237,7 +260,7 @@ export function SettingsPage() {
                     value={settings.port}
                     min={1024}
                     max={65535}
-                    onChange={(n) => updateSetting({ port: n })}
+                    onChange={updatePort}
                   />
                 </div>
               </Row>

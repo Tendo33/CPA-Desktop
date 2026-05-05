@@ -199,6 +199,9 @@ export const zh = {
   },
   bootProbe: '正在检测 CPA 安装状态…',
   mgmtUnavailable: {
+    titleDown: '管理接口不可达',
+    bodyDown:
+      'CPA 状态显示正在运行，但管理接口没有响应。请查看日志、确认端口，或重启 CPA。',
     titleNoKey: '管理接口未启用',
     bodyNoKey:
       '当前 secret-key 为空，所有 /v0/management 接口返回 404。请到「设置」里生成一把密钥再使用面板。',

@@ -52,12 +52,7 @@ export function DownloadStep({ onDone }: Props) {
     setError('')
     setProgress(0)
     try {
-      await downloadCpaUpdate(
-        update.downloadUrl,
-        update.latestVersion,
-        mirrors.length ? mirrors : undefined,
-        update.expectedSha256 ?? null,
-      )
+      await downloadCpaUpdate(update.latestVersion, mirrors.length ? mirrors : undefined)
     } catch (e) {
       setError(String(e))
       setDownloading(false)

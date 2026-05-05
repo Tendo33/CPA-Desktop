@@ -41,4 +41,23 @@ describe('useCpaStore', () => {
 
     expect(useCpaStore.getState().status).toEqual(RUNNING)
   })
+
+  it('updates the live port from backend port-change events', async () => {
+    const handlers: Record<string, (event: { payload: unknown }) => void> = {}
+    const unlistenStatus = vi.fn()
+    const unlistenPort = vi.fn()
+    tauriMocks.listen.mockImplementation(async (event, handler) => {
+      handlers[event] = handler
+      return event === 'cpa:port' ? unlistenPort : unlistenStatus
+    })
+
+    const cleanup = await useCpaStore.getState().initialize()
+    handlers['cpa:port']?.({ payload: 9421 })
+
+    expect(useCpaStore.getState().port).toBe(9421)
+
+    cleanup()
+    expect(unlistenStatus).toHaveBeenCalledTimes(1)
+    expect(unlistenPort).toHaveBeenCalledTimes(1)
+  })
 })

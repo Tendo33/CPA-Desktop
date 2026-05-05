@@ -123,8 +123,7 @@ export const saveSettings = (settings: AppSettings) =>
   invoke<void>('save_settings_cmd', { settings })
 export const readConfigYaml = () => invoke<string>('read_config_yaml')
 export const writeConfigYaml = (content: string) => invoke<void>('write_config_yaml', { content })
-export const writeConfigYamlPort = (port: number) =>
-  invoke<void>('write_config_yaml_port', { port })
+export const setCpaPort = (port: number) => invoke<void>('set_cpa_port', { port })
 export const readConfigField = <T = unknown>(path: string) =>
   invoke<T | null>('read_config_field', { path })
 export const writeConfigField = (path: string, value: unknown) =>
@@ -137,17 +136,10 @@ export const setAutolaunchEnabled = (enabled: boolean) =>
 
 // Updater
 export const checkCpaUpdate = () => invoke<UpdateCheckResult>('check_cpa_update')
-export const downloadCpaUpdate = (
-  downloadUrl: string,
-  version: string,
-  mirrors?: string[],
-  expectedSha256?: string | null,
-) =>
+export const downloadCpaUpdate = (version: string, mirrors?: string[]) =>
   invoke<void>('download_cpa_update', {
-    downloadUrl,
     version,
     mirrors,
-    expectedSha256: expectedSha256 ?? null,
   })
 
 // Install source

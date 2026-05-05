@@ -5,6 +5,11 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 
+const CLI_PROXY_RELEASE_API: &str =
+    "https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest";
+const CLI_PROXY_RELEASE_DOWNLOAD_PREFIX: &str =
+    "https://github.com/router-for-me/CLIProxyAPI/releases/download/";
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCheckResult {
@@ -117,27 +122,47 @@ struct GhAsset {
     browser_download_url: String,
 }
 
+async fn fetch_latest_release(client: &reqwest::Client) -> Result<GhRelease, String> {
+    client
+        .get(CLI_PROXY_RELEASE_API)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+fn release_asset<'a>(release: &'a GhRelease, name: &str) -> Result<&'a GhAsset, String> {
+    release
+        .assets
+        .iter()
+        .find(|a| a.name == name)
+        .ok_or_else(|| format!("No asset found for: {name}"))
+}
+
+fn is_official_release_asset_url(url: &str) -> bool {
+    url.starts_with(CLI_PROXY_RELEASE_DOWNLOAD_PREFIX)
+}
+
 #[tauri::command]
 pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
     let settings = app_config::load_settings(&app);
 
     let client = download_client();
 
-    let release: GhRelease = client
-        .get("https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let release = fetch_latest_release(&client).await?;
 
     let name = asset_name(&release.tag_name);
-    let asset = release
-        .assets
-        .iter()
-        .find(|a| a.name == name)
-        .ok_or_else(|| format!("No asset found for: {name}"))?;
+    let asset = release_asset(&release, &name)?;
+    if !is_official_release_asset_url(&asset.browser_download_url) {
+        return Err(format!(
+            "release asset URL is not from the official CLIProxyAPI repository: {}",
+            asset.browser_download_url
+        ));
+    }
+    let latest_version = release.tag_name.clone();
+    let download_url = asset.browser_download_url.clone();
 
     // Look for a matching `*.sha256` asset OR a `checksums.txt` listing.
     let expected_sha256 = find_expected_sha256(&client, &release, &name).await;
@@ -148,13 +173,13 @@ pub async fn check_cpa_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
         None
     };
     let current = effective_current_version(settings.cpa_version.clone(), detected);
-    let update_available = newer_than(&release.tag_name, current.as_deref());
+    let update_available = newer_than(&latest_version, current.as_deref());
 
     Ok(UpdateCheckResult {
         current_version: current,
-        latest_version: release.tag_name,
+        latest_version,
         update_available,
-        download_url: asset.browser_download_url.clone(),
+        download_url,
         expected_sha256,
         strategy: settings.install_source.update_strategy(),
     })
@@ -172,19 +197,24 @@ async fn find_expected_sha256(
 ) -> Option<String> {
     let direct_name = format!("{asset_name}.sha256");
     if let Some(direct) = release.assets.iter().find(|a| a.name == direct_name) {
-        if let Ok(text) = client
-            .get(&direct.browser_download_url)
-            .send()
-            .await
-            .ok()?
-            .text()
-            .await
-        {
-            return parse_first_sha256_token(&text);
+        if is_official_release_asset_url(&direct.browser_download_url) {
+            if let Ok(text) = client
+                .get(&direct.browser_download_url)
+                .send()
+                .await
+                .ok()?
+                .text()
+                .await
+            {
+                return parse_first_sha256_token(&text);
+            }
         }
     }
     for candidate in ["checksums.txt", "SHA256SUMS", "sha256sums.txt"] {
         if let Some(asset) = release.assets.iter().find(|a| a.name == candidate) {
+            if !is_official_release_asset_url(&asset.browser_download_url) {
+                continue;
+            }
             if let Ok(text) = client
                 .get(&asset.browser_download_url)
                 .send()
@@ -328,10 +358,8 @@ fn apply_mirror(url: &str, mirror: &str) -> String {
 #[tauri::command]
 pub async fn download_cpa_update(
     app: AppHandle,
-    download_url: String,
     version: String,
     mirrors: Option<Vec<String>>,
-    expected_sha256: Option<String>,
 ) -> Result<(), String> {
     // Refuse to overwrite binaries we don't own. The UI shouldn't reach
     // this codepath for non-managed sources, but defend in depth.
@@ -344,6 +372,26 @@ pub async fn download_cpa_update(
     }
 
     let client = download_client();
+    let release = fetch_latest_release(&client).await?;
+    if release.tag_name != version {
+        return Err(format!(
+            "requested CPA version {version} is not the latest official release ({})",
+            release.tag_name
+        ));
+    }
+
+    let asset_name = asset_name(&version);
+    let asset = release_asset(&release, &asset_name)?;
+    if !is_official_release_asset_url(&asset.browser_download_url) {
+        return Err(format!(
+            "release asset URL is not from the official CLIProxyAPI repository: {}",
+            asset.browser_download_url
+        ));
+    }
+    let download_url = asset.browser_download_url.clone();
+    let expected_sha256 = find_expected_sha256(&client, &release, &asset_name)
+        .await
+        .ok_or_else(|| format!("no SHA256 checksum found for {asset_name}; refusing update"))?;
 
     let bin_dir = app_config::bin_dir(&app);
     std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
@@ -361,22 +409,18 @@ pub async fn download_cpa_update(
         download_with_mirrors(&app, &client, &download_url, &mirrors, &partial_path).await?;
 
     // Integrity check before we touch anything on disk.
-    if let Some(expected) = expected_sha256.as_deref() {
-        let got = match sha256_hex_file(&downloaded_path) {
-            Ok(g) => g,
-            Err(e) => {
-                let _ = std::fs::remove_file(&downloaded_path);
-                return Err(e);
-            }
-        };
-        if !got.eq_ignore_ascii_case(expected) {
+    let got = match sha256_hex_file(&downloaded_path) {
+        Ok(g) => g,
+        Err(e) => {
             let _ = std::fs::remove_file(&downloaded_path);
-            return Err(format!(
-                "checksum mismatch: expected {expected}, got {got} (download discarded)"
-            ));
+            return Err(e);
         }
-    } else {
-        log::warn!("no SHA256 available for {download_url}; skipping integrity check");
+    };
+    if !got.eq_ignore_ascii_case(&expected_sha256) {
+        let _ = std::fs::remove_file(&downloaded_path);
+        return Err(format!(
+            "checksum mismatch: expected {expected_sha256}, got {got} (download discarded)"
+        ));
     }
 
     let binary_name = if cfg!(target_os = "windows") {
@@ -390,7 +434,7 @@ pub async fn download_cpa_update(
     // replaces a working install.
     let staging = bin_dir.join(format!("{binary_name}.new"));
     let _ = std::fs::remove_file(&staging);
-    let extract_res = if download_url.ends_with(".zip") {
+    let extract_res = if asset_name.ends_with(".zip") {
         extract_zip_to(&downloaded_path, binary_name, &staging)
     } else {
         extract_targz_to(&downloaded_path, binary_name, &staging)
@@ -598,6 +642,22 @@ mod tests {
         let url = "https://github.com/x/y/releases/download/v1/file.tar.gz";
         assert_eq!(apply_mirror(url, "github.com"), url);
         assert_eq!(apply_mirror(url, ""), url);
+    }
+
+    #[test]
+    fn only_official_cli_proxy_release_assets_are_trusted() {
+        assert!(is_official_release_asset_url(
+            "https://github.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"
+        ));
+        assert!(!is_official_release_asset_url(
+            "http://github.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"
+        ));
+        assert!(!is_official_release_asset_url(
+            "https://github.com/evil/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"
+        ));
+        assert!(!is_official_release_asset_url(
+            "https://example.com/router-for-me/CLIProxyAPI/releases/download/v1.2.3/CLIProxyAPI_1.2.3_linux_amd64.tar.gz"
+        ));
     }
 
     #[test]

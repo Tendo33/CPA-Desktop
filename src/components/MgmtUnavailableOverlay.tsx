@@ -19,8 +19,17 @@ interface Props {
 export function MgmtUnavailableOverlay({ reason, onGoToSettings, onReload }: Props) {
   const t = useT()
   const isNoKey = reason === 'noKey'
-  const title = isNoKey ? t.mgmtUnavailable.titleNoKey : t.mgmtUnavailable.titleUnauthorized
-  const body = isNoKey ? t.mgmtUnavailable.bodyNoKey : t.mgmtUnavailable.bodyUnauthorized
+  const isDown = reason === 'down'
+  const title = isDown
+    ? t.mgmtUnavailable.titleDown
+    : isNoKey
+      ? t.mgmtUnavailable.titleNoKey
+      : t.mgmtUnavailable.titleUnauthorized
+  const body = isDown
+    ? t.mgmtUnavailable.bodyDown
+    : isNoKey
+      ? t.mgmtUnavailable.bodyNoKey
+      : t.mgmtUnavailable.bodyUnauthorized
   return (
     <div
       style={{

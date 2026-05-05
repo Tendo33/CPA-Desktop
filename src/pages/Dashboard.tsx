@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { CpaWebView, type CpaWebViewHandle } from '@/components/CpaWebView'
 import { useCpaStore } from '@/stores/cpa'
 import {
-  getSettings,
   probeManagementApi,
   readConfigField,
-  saveSettings,
+  setCpaPort,
   startCpa,
-  writeConfigYamlPort,
   type MgmtProbeResult,
 } from '@/lib/tauri'
 import { errorOf, isRunning, isStarting, isError, isIdle, isStopped } from '@/lib/cpaStatus'
@@ -33,17 +31,15 @@ export function Dashboard() {
     if (!portInUseMatch) return
     const next = Number(portInUseMatch[1]) + 1
     try {
-      const current = await getSettings()
-      await saveSettings({ ...current, port: next })
-      await writeConfigYamlPort(next)
+      await setCpaPort(next)
       await startCpa()
     } catch (e) {
       console.error('retry next port failed', e)
     }
   }
 
-  const managementUrl = `http://localhost:${port}/management.html#/quota`
-  const apiBase = `http://localhost:${port}`
+  const managementUrl = `http://127.0.0.1:${port}/management.html#/quota`
+  const apiBase = `http://127.0.0.1:${port}`
 
   // Pull the latest secret-key whenever CPA enters Running so the
   // injected auto-login uses the current credentials. Re-runs on
@@ -109,10 +105,10 @@ export function Dashboard() {
         ref={webviewRef}
         url={managementUrl}
         visible={running}
-        autoLogin={secretKey ? { apiBase, secretKey } : null}
+        autoLogin={secretKey && mgmtProbe === 'ok' ? { apiBase, secretKey } : null}
       />
 
-      {probeForRender && probeForRender !== 'ok' && probeForRender !== 'down' && (
+      {probeForRender && probeForRender !== 'ok' && (
         <MgmtUnavailableOverlay
           reason={probeForRender}
           onGoToSettings={() =>
