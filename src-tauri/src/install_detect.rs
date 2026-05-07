@@ -382,7 +382,7 @@ mod tests {
         let prefix = PathBuf::from("/opt/homebrew/opt/cliproxyapi");
         let candidates = homebrew_binary_candidates(&prefix);
         assert_eq!(candidates[0], prefix.join("bin").join("cliproxyapi"));
-        assert_eq!(candidates[1], prefix.join("bin").join("cli-proxy-api"));
+        assert_eq!(candidates[1], prefix.join("bin").join(binary_filename()));
     }
 
     #[test]
