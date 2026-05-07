@@ -156,6 +156,12 @@ export function SettingsPage() {
     setYamlError('')
     try {
       await writeConfigYaml(yaml)
+      const nextPort = await getPortFromYaml().catch(() => null)
+      if (typeof nextPort === 'number') {
+        setYamlPort(nextPort)
+        setSettings((current) => (current ? { ...current, port: nextPort } : current))
+      }
+      setNeedsRestart(true)
       flash(t.settings.configSaved)
     } catch (e) {
       setYamlError(String(e))

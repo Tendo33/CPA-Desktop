@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthFilesPage } from '@/pages/AuthFiles'
 import { useCpaStore } from '@/stores/cpa'
@@ -37,5 +37,26 @@ describe('AuthFilesPage secret handling', () => {
     await waitFor(() => expect(input).toHaveValue('config-secret'))
 
     expect(localStorage.getItem('cpa.authFiles.password')).toBeNull()
+  })
+
+  it('does not overwrite user-entered password when autofill resolves later', async () => {
+    let resolveSecret: ((value: string) => void) | undefined
+    tauriMocks.readConfigField.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSecret = resolve
+        }),
+    )
+
+    render(<AuthFilesPage />)
+
+    const label = screen.getByText('Management password / Bearer').closest('label')
+    const input = label?.querySelector('input') as HTMLInputElement | null
+    expect(input).toBeTruthy()
+
+    fireEvent.change(input!, { target: { value: 'typed-secret' } })
+    if (resolveSecret) resolveSecret('config-secret')
+
+    await waitFor(() => expect(input).toHaveValue('typed-secret'))
   })
 })

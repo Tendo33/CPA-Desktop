@@ -93,6 +93,10 @@ export function ConfigForm() {
         requestRetry: typeof requestRetry === 'number' ? requestRetry : DEFAULTS.requestRetry,
       })
       setLoaded(true)
+    }).catch((e) => {
+      if (cancelled) return
+      setLoaded(true)
+      toast.error(String(e))
     })
     return () => {
       cancelled = true

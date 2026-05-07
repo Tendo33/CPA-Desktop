@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Filter, RefreshCw, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 import {
@@ -72,6 +72,7 @@ export function AuthFilesPage() {
   const [statusText, setStatusText] = useState<string>(t.authFiles.emptyInitial)
   const [statusTone, setStatusTone] = useState<'info' | 'success' | 'warn' | 'error'>('info')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const passwordEditedRef = useRef(false)
 
   const createSession = async () => createAuthSession(password)
 
@@ -102,11 +103,16 @@ export function AuthFilesPage() {
   // every keystroke and b) typing always wins over the auto-fill.
   useEffect(() => {
     if (password) return
+    let cancelled = false
     void readConfigField<string>('remote-management.secret-key')
       .then((v) => {
-        if (typeof v === 'string' && v && !password) setPassword(v)
+        if (cancelled || passwordEditedRef.current) return
+        if (typeof v === 'string' && v) setPassword(v)
       })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -309,7 +315,10 @@ export function AuthFilesPage() {
                 <Input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    passwordEditedRef.current = true
+                    setPassword(e.target.value)
+                  }}
                   autoComplete="off"
                   disabled={busy}
                 />

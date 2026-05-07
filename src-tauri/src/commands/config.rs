@@ -257,10 +257,28 @@ pub fn read_config_yaml(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn write_config_yaml(app: AppHandle, content: String) -> Result<(), String> {
+pub fn write_config_yaml(
+    app: AppHandle,
+    state: State<'_, SharedCpaState>,
+    content: String,
+) -> Result<(), String> {
     let path = app_config::config_yaml_path(&app);
     let backups = app_config::backups_dir(&app);
-    write_config_yaml_with_backup(&path, &backups, &content)
+    write_config_yaml_with_backup(&path, &backups, &content)?;
+
+    if let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
+        if let Ok(port) = app_config::parse_port_value(&doc) {
+            let mut settings = app_config::load_settings(&app);
+            if settings.port != port {
+                settings.port = port;
+                app_config::save_settings(&app, &settings)?;
+            }
+            state.lock().unwrap().port = port;
+            let _ = app.emit("cpa:port", port);
+        }
+    }
+
+    Ok(())
 }
 
 fn backup_current_config(config_path: &Path, backups_dir: &Path) -> Result<(), String> {
@@ -390,6 +408,7 @@ pub fn read_config_field(
 #[tauri::command]
 pub fn write_config_field(
     app: AppHandle,
+    state: State<'_, SharedCpaState>,
     path: String,
     value: serde_json::Value,
 ) -> Result<(), String> {
@@ -397,7 +416,7 @@ pub fn write_config_field(
     let mut doc = config_doc_for_write(std::fs::read_to_string(&path_buf))?;
     set_path(&mut doc, &path, value)?;
     let out = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
-    write_config_yaml(app, out)
+    write_config_yaml(app, state, out)
 }
 
 #[tauri::command]
