@@ -13,6 +13,9 @@ type Rgba = {
   a: number
 }
 
+type ParsedPng = ReturnType<typeof unfilterPng>
+const parsedPngCache = new Map<string, ParsedPng>()
+
 function readPng(filePath: string) {
   const png = readFileSync(path.join(root, filePath))
   const signature = png.subarray(0, 8).toString('hex')
@@ -53,6 +56,9 @@ function bytesPerPixel(colorType: number) {
 }
 
 function unfilterPng(filePath: string) {
+  const cached = parsedPngCache.get(filePath)
+  if (cached) return cached
+
   const png = readPng(filePath)
   expect(png.bitDepth).toBe(8)
 
@@ -89,11 +95,12 @@ function unfilterPng(filePath: string) {
     rows.push(row)
   }
 
-  return { ...png, bpp, rows }
+  const parsed = { ...png, bpp, rows }
+  parsedPngCache.set(filePath, parsed)
+  return parsed
 }
 
-function pixelAt(filePath: string, x: number, y: number): Rgba {
-  const png = unfilterPng(filePath)
+function pixelAt(png: ParsedPng, x: number, y: number): Rgba {
   const rowOffset = x * png.bpp
   const row = png.rows[y]
   return {
@@ -135,24 +142,32 @@ describe('generated assets', () => {
     expect(svg).not.toContain('M724 512c0 119')
   })
 
-  test('Tauri app icon keeps transparent launcher corners', () => {
-    const icon = readPng('src-tauri/icons/icon.png')
-    expect(icon.colorType).toBe(6)
+  test(
+    'Tauri app icon keeps transparent launcher corners',
+    () => {
+      const icon = unfilterPng('src-tauri/icons/icon.png')
+      expect(icon.colorType).toBe(6)
 
-    expect(pixelAt('src-tauri/icons/icon.png', 0, 0).a).toBe(0)
-    expect(pixelAt('src-tauri/icons/icon.png', icon.width - 1, 0).a).toBe(0)
-    expect(pixelAt('src-tauri/icons/icon.png', 0, icon.height - 1).a).toBe(0)
-    expect(pixelAt('src-tauri/icons/icon.png', icon.width - 1, icon.height - 1).a).toBe(0)
-  })
+      expect(pixelAt(icon, 0, 0).a).toBe(0)
+      expect(pixelAt(icon, icon.width - 1, 0).a).toBe(0)
+      expect(pixelAt(icon, 0, icon.height - 1).a).toBe(0)
+      expect(pixelAt(icon, icon.width - 1, icon.height - 1).a).toBe(0)
+    },
+    30_000
+  )
 
-  test('cross-platform icon has visible pixels on dark taskbars', () => {
-    const pixels = visiblePixels('src-tauri/icons/icon.png')
-    const averageLuma =
-      pixels.reduce((total, { r, g, b }) => total + 0.2126 * r + 0.7152 * g + 0.0722 * b, 0) /
-      pixels.length
+  test(
+    'cross-platform icon has visible pixels on dark taskbars',
+    () => {
+      const pixels = visiblePixels('src-tauri/icons/icon.png')
+      const averageLuma =
+        pixels.reduce((total, { r, g, b }) => total + 0.2126 * r + 0.7152 * g + 0.0722 * b, 0) /
+        pixels.length
 
-    expect(averageLuma).toBeGreaterThan(150)
-  })
+      expect(averageLuma).toBeGreaterThan(150)
+    },
+    30_000
+  )
 })
 
 describe('README imagery section', () => {

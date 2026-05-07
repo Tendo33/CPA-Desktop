@@ -591,7 +591,10 @@ mod tests {
         let err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
         let doc = config_doc_for_write(Err(err));
 
-        assert!(doc.is_err(), "permission failures must not become empty config");
+        assert!(
+            doc.is_err(),
+            "permission failures must not become empty config"
+        );
     }
 
     #[test]
