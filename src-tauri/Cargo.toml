@@ -1,6 +1,6 @@
 [package]
 name = "cpa-desktop"
-version = "0.3.6"
+version = "0.3.7"
 description = "CPA Desktop - CLIProxyAPI manager"
 authors = ["CPA Desktop Contributors"]
 edition = "2021"
