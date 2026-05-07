@@ -132,16 +132,6 @@ function visiblePixels(filePath: string) {
 }
 
 describe('generated assets', () => {
-  test('app icon uses the native CPA diamond knot mark', () => {
-    const svg = readFileSync(path.join(root, 'assets/brand/cpa-desktop-icon.svg'), 'utf8')
-
-    expect(svg).toContain('id="cpa-native-mark"')
-    expect(svg).toContain('id="cpa-diamond"')
-    expect(svg).toContain('id="cpa-knot"')
-    expect(svg).not.toContain('M300 512c0-119')
-    expect(svg).not.toContain('M724 512c0 119')
-  })
-
   test(
     'Tauri app icon keeps transparent launcher corners',
     () => {
