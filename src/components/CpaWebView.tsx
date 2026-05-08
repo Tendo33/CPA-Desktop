@@ -82,6 +82,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
   ({ url, visible, autoLogin, onAutoLoginError }, ref) => {
     const wvRef = useRef<Webview | null>(null)
     const tokenRef = useRef(0)
+    const injectedAutoLoginKeyRef = useRef<string | null>(null)
     const visibleRef = useRef(visible)
     visibleRef.current = visible
     const autoLoginRef = useRef(autoLogin)
@@ -90,9 +91,29 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
       tokenRef.current += 1
     }, [])
 
+    const injectAutoLogin = useCallback(
+      (token: number, al: { apiBase: string; secretKey: string } | null | undefined) => {
+        if (!al?.secretKey) return
+        const key = `${al.apiBase}\n${al.secretKey}`
+        if (injectedAutoLoginKeyRef.current === key) return
+        injectedAutoLoginKeyRef.current = key
+        const script = buildMgmtAutoLoginScript(al)
+        setTimeout(() => {
+          if (tokenRef.current !== token) return
+          evalInWebview(LABEL, script).catch((e) => {
+            injectedAutoLoginKeyRef.current = null
+            console.warn('[CpaWebView] auto-login eval failed', e)
+            onAutoLoginError?.(e instanceof Error ? e.message : String(e))
+          })
+        }, 350)
+      },
+      [onAutoLoginError],
+    )
+
     const spawn = useCallback(
       (u: string) => {
         const token = ++tokenRef.current
+        injectedAutoLoginKeyRef.current = null
         spawnWebview(u)
           .then((wv) => {
             if (!wv) return
@@ -110,24 +131,19 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
             // Inject auto-login a beat after the page boots so the script
             // runs against the management origin's localStorage. The script
             // is idempotent and self-reloads only on first run.
-            const al = autoLoginRef.current
-            if (al?.secretKey) {
-              const script = buildMgmtAutoLoginScript(al)
-              setTimeout(() => {
-                if (tokenRef.current !== token) return
-                evalInWebview(LABEL, script).catch((e) => {
-                  console.warn('[CpaWebView] auto-login eval failed', e)
-                  onAutoLoginError?.(e instanceof Error ? e.message : String(e))
-                })
-              }, 350)
-            }
+            injectAutoLogin(token, autoLoginRef.current)
           })
           .catch(console.error)
       },
-      [onAutoLoginError],
+      [injectAutoLogin],
     )
 
     useImperativeHandle(ref, () => ({ reload: () => spawn(url) }), [spawn, url])
+
+    useEffect(() => {
+      if (!visible || !wvRef.current) return
+      injectAutoLogin(tokenRef.current, autoLogin)
+    }, [autoLogin, injectAutoLogin, visible])
 
     useEffect(() => {
       if (!onAutoLoginError) return
@@ -163,6 +179,7 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
       return () => {
         clearTimeout(t)
         invalidateSpawnToken()
+        injectedAutoLoginKeyRef.current = null
         wvRef.current?.close()
         wvRef.current = null
       }

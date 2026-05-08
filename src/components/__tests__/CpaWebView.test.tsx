@@ -1,6 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CpaWebView } from '@/components/CpaWebView'
+import { evalInWebview } from '@/lib/tauri'
 
 type Unlisten = () => void
 type Deferred<T> = {
@@ -23,7 +24,25 @@ const tauriMocks = vi.hoisted(() => {
     onResized: vi.fn(),
     onFocusChanged: vi.fn(),
   }
-  return { win, getCurrentWindow: vi.fn(() => win), listen: vi.fn() }
+  const webviews: MockWebview[] = []
+  class MockWebview {
+    static getByLabel = vi.fn(async () => null)
+    close = vi.fn(async () => {})
+    hide = vi.fn(async () => {})
+    show = vi.fn(async () => {})
+    setFocus = vi.fn(async () => {})
+    setPosition = vi.fn(async () => {})
+    setSize = vi.fn(async () => {})
+
+    constructor() {
+      webviews.push(this)
+    }
+
+    once(event: string, cb: () => void) {
+      if (event === 'tauri://created') queueMicrotask(cb)
+    }
+  }
+  return { win, getCurrentWindow: vi.fn(() => win), listen: vi.fn(), Webview: MockWebview, webviews }
 })
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -47,9 +66,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 }))
 
 vi.mock('@tauri-apps/api/webview', () => ({
-  Webview: class Webview {
-    static getByLabel = vi.fn(async () => null)
-  },
+  Webview: tauriMocks.Webview,
 }))
 
 vi.mock('@/lib/tauri', () => ({
@@ -62,12 +79,19 @@ describe('CpaWebView window listener cleanup', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    tauriMocks.webviews.length = 0
     tauriMocks.getCurrentWindow.mockReturnValue(tauriMocks.win)
     tauriMocks.listen.mockResolvedValue(vi.fn())
+    tauriMocks.Webview.getByLabel.mockResolvedValue(null)
+    vi.mocked(evalInWebview).mockResolvedValue()
     resizeDeferred = deferred<Unlisten>()
     focusDeferred = deferred<Unlisten>()
     tauriMocks.win.onResized.mockReturnValue(resizeDeferred.promise)
     tauriMocks.win.onFocusChanged.mockReturnValue(focusDeferred.promise)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('cleans up both listeners when focus resolves before resize', async () => {
@@ -144,5 +168,38 @@ describe('CpaWebView window listener cleanup', () => {
     })
 
     expect(onAutoLoginError).toHaveBeenCalledWith('storage protocol mismatch')
+  })
+
+  it('injects auto-login when credentials arrive after the webview is already visible', async () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<CpaWebView url="http://127.0.0.1:8317" visible />)
+
+    await act(async () => {
+      vi.advanceTimersByTime(150)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(tauriMocks.webviews).toHaveLength(1)
+    expect(evalInWebview).not.toHaveBeenCalled()
+
+    rerender(
+      <CpaWebView
+        url="http://127.0.0.1:8317"
+        visible
+        autoLogin={{ apiBase: 'http://127.0.0.1:8317', secretKey: 'secret-from-config' }}
+      />,
+    )
+
+    await act(async () => {
+      vi.advanceTimersByTime(350)
+      await Promise.resolve()
+    })
+
+    expect(evalInWebview).toHaveBeenCalledTimes(1)
+    expect(evalInWebview).toHaveBeenCalledWith(
+      'cpa-content',
+      expect.stringContaining('secret-from-config'),
+    )
   })
 })

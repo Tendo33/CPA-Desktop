@@ -59,8 +59,15 @@ mod tests {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0u16)).unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        // SO_LINGER + TIME_WAIT can race here, but ephemeral ports get
-        // reused fast on every modern OS, so this is reliable in practice.
+        // Some kernels need a short moment before both v4 and v6 loopback
+        // binds agree the just-released ephemeral port is reusable.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        while std::time::Instant::now() < deadline {
+            if is_port_available(port) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert!(is_port_available(port));
     }
 
