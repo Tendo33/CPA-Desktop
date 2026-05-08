@@ -28,20 +28,33 @@ vi.mock('@/components/CpaWebView', async () => {
   return {
     CpaWebView: React.forwardRef(
       (
-        props: {
+        {
+          autoLogin,
+          onAutoLoginError,
+          url,
+          visible,
+        }: {
           url: string
           visible: boolean
           autoLogin: unknown
+          onAutoLoginError?: (message: string) => void
         },
         ref,
       ) => {
+        const emittedErrorRef = React.useRef(false)
+        React.useEffect(() => {
+          if (autoLogin && !emittedErrorRef.current) {
+            emittedErrorRef.current = true
+            onAutoLoginError?.('eval failed')
+          }
+        }, [autoLogin, onAutoLoginError])
         React.useImperativeHandle(ref, () => ({ reload: vi.fn() }))
         return (
           <div
             data-testid="cpa-webview"
-            data-url={props.url}
-            data-visible={props.visible ? 'true' : 'false'}
-            data-has-auto-login={props.autoLogin ? 'true' : 'false'}
+            data-url={url}
+            data-visible={visible ? 'true' : 'false'}
+            data-has-auto-login={autoLogin ? 'true' : 'false'}
           />
         )
       },
@@ -85,5 +98,20 @@ describe('Dashboard management webview safety', () => {
     const webview = screen.getByTestId('cpa-webview')
     expect(webview).toHaveAttribute('data-url', 'http://127.0.0.1:8317/management.html#/quota')
     expect(webview).toHaveAttribute('data-has-auto-login', 'false')
+  })
+
+  it('shows the management overlay when auto-login injection fails', async () => {
+    tauriMocks.probeManagementApi.mockResolvedValue('ok')
+
+    render(<Dashboard />)
+
+    await act(async () => {
+      await Promise.resolve()
+      vi.advanceTimersByTime(850)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('mgmt-overlay')).toHaveAttribute('data-reason', 'down')
   })
 })

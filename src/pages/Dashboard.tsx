@@ -65,11 +65,13 @@ export function Dashboard() {
   // than letting the user stare at "404 page not found" inside the
   // panel.
   const [mgmtProbe, setMgmtProbe] = useState<MgmtProbeResult | null>(null)
+  const [autoLoginError, setAutoLoginError] = useState<string | null>(null)
   // Drop the cached probe whenever CPA leaves Running so we don't show
   // a stale overlay on the next start. Computed here (not via setState
   // inside the probe effect) to keep that effect free of cascading
   // renders.
   const probeForRender = running ? mgmtProbe : null
+  const autoLoginErrorForRender = running ? autoLoginError : null
   useEffect(() => {
     if (!running) return
     let cancelled = false
@@ -106,15 +108,20 @@ export function Dashboard() {
         url={managementUrl}
         visible={running}
         autoLogin={secretKey && mgmtProbe === 'ok' ? { apiBase, secretKey } : null}
+        onAutoLoginError={(message) => {
+          setAutoLoginError(message)
+          setMgmtProbe('down')
+        }}
       />
 
-      {probeForRender && probeForRender !== 'ok' && (
+      {((probeForRender && probeForRender !== 'ok') || autoLoginErrorForRender) && (
         <MgmtUnavailableOverlay
-          reason={probeForRender}
+          reason={probeForRender && probeForRender !== 'ok' ? probeForRender : 'down'}
           onGoToSettings={() =>
             window.dispatchEvent(new CustomEvent('cpa-navigate', { detail: { page: 'settings' } }))
           }
           onReload={() => {
+            setAutoLoginError(null)
             setMgmtProbe(null)
             webviewRef.current?.reload()
           }}

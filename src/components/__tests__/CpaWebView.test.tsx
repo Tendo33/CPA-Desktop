@@ -23,8 +23,12 @@ const tauriMocks = vi.hoisted(() => {
     onResized: vi.fn(),
     onFocusChanged: vi.fn(),
   }
-  return { win, getCurrentWindow: vi.fn(() => win) }
+  return { win, getCurrentWindow: vi.fn(() => win), listen: vi.fn() }
 })
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: tauriMocks.listen,
+}))
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: tauriMocks.getCurrentWindow,
@@ -59,6 +63,7 @@ describe('CpaWebView window listener cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tauriMocks.getCurrentWindow.mockReturnValue(tauriMocks.win)
+    tauriMocks.listen.mockResolvedValue(vi.fn())
     resizeDeferred = deferred<Unlisten>()
     focusDeferred = deferred<Unlisten>()
     tauriMocks.win.onResized.mockReturnValue(resizeDeferred.promise)
@@ -112,5 +117,32 @@ describe('CpaWebView window listener cleanup', () => {
     expect(() => render(<CpaWebView url="http://127.0.0.1:8317" visible={false} />)).not.toThrow()
     expect(tauriMocks.win.onResized).not.toHaveBeenCalled()
     expect(tauriMocks.win.onFocusChanged).not.toHaveBeenCalled()
+  })
+
+  it('reports auto-login status errors emitted by the child webview', async () => {
+    const onAutoLoginError = vi.fn()
+    let handler: ((event: { payload: { status: string; message?: string } }) => void) | null = null
+    tauriMocks.listen.mockImplementation(async (_event: string, cb: typeof handler) => {
+      handler = cb
+      return vi.fn()
+    })
+
+    render(
+      <CpaWebView
+        url="http://127.0.0.1:8317"
+        visible={false}
+        onAutoLoginError={onAutoLoginError}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(tauriMocks.listen).toHaveBeenCalledWith('cpa:auto-login-status', handler),
+    )
+
+    act(() => {
+      handler?.({ payload: { status: 'error', message: 'storage protocol mismatch' } })
+    })
+
+    expect(onAutoLoginError).toHaveBeenCalledWith('storage protocol mismatch')
   })
 })

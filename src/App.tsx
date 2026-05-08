@@ -10,6 +10,7 @@ import { SettingsPage } from '@/pages/Settings'
 import { AboutPage } from '@/pages/About'
 import { useCpaStore } from '@/stores/cpa'
 import { useLogStore } from '@/stores/logs'
+import { useAppSettingsStore } from '@/stores/appSettings'
 import { useSettingsStore } from '@/stores/settings'
 import { useT } from '@/lib/i18n'
 import {
@@ -40,6 +41,8 @@ export default function App() {
   const unlistenRefs = useRef<UnlistenFn[]>([])
 
   const theme = useSettingsStore((s) => s.theme)
+  const autoCheckAppUpdates = useAppSettingsStore((s) => s.autoCheckAppUpdates)
+  const setAutoCheckAppUpdates = useAppSettingsStore((s) => s.setAutoCheckAppUpdates)
   const t = useT()
 
   // Apply theme; honor 'system' by reading prefers-color-scheme
@@ -169,35 +172,43 @@ export default function App() {
   useEffect(() => {
     if (!ready) return
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    void getSettings().then(async (s) => {
-      if (cancelled || !s.autoCheckAppUpdates) return
-      timer = setTimeout(
-        async () => {
-          try {
-            const u = await checkAppUpdate()
-            if (u) {
-              const notif = await import('@tauri-apps/plugin-notification')
-              const granted = await notif.isPermissionGranted()
-              if (granted) {
-                await notif.sendNotification({
-                  title: t.appUpdate.notificationTitle,
-                  body: `v${u.version}`,
-                })
-              }
-            }
-          } catch {
-            /* swallow */
-          }
-        },
-        6 * 60 * 60 * 1000,
-      )
-    })
+    void getSettings()
+      .then((s) => {
+        if (!cancelled) setAutoCheckAppUpdates(Boolean(s.autoCheckAppUpdates))
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
+    }
+  }, [ready, setAutoCheckAppUpdates])
+
+  useEffect(() => {
+    if (!ready || !autoCheckAppUpdates) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    timer = setTimeout(
+      async () => {
+        try {
+          const u = await checkAppUpdate()
+          if (u) {
+            const notif = await import('@tauri-apps/plugin-notification')
+            const granted = await notif.isPermissionGranted()
+            if (granted) {
+              await notif.sendNotification({
+                title: t.appUpdate.notificationTitle,
+                body: `v${u.version}`,
+              })
+            }
+          }
+        } catch {
+          /* swallow */
+        }
+      },
+      6 * 60 * 60 * 1000,
+    )
+    return () => {
       if (timer) clearTimeout(timer)
     }
-  }, [ready, t])
+  }, [autoCheckAppUpdates, ready, t])
 
   useEffect(() => {
     if (!ready) return

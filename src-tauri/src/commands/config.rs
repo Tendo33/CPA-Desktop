@@ -302,7 +302,9 @@ fn write_config_yaml_with_backup(
     backups_dir: &Path,
     content: &str,
 ) -> Result<(), String> {
-    serde_yaml::from_str::<serde_yaml::Value>(content).map_err(|e| format!("Invalid YAML: {e}"))?;
+    let doc = serde_yaml::from_str::<serde_yaml::Value>(content)
+        .map_err(|e| format!("Invalid YAML: {e}"))?;
+    app_config::parse_port_value(&doc)?;
     backup_current_config(config_path, backups_dir)?;
     app_config::atomic_write(config_path, content.as_bytes()).map_err(|e| e.to_string())
 }
@@ -591,6 +593,40 @@ mod tests {
             std::fs::read_to_string(backup.path()).unwrap(),
             "port: 8317\n"
         );
+    }
+
+    #[test]
+    fn write_config_yaml_with_backup_rejects_missing_or_invalid_port_without_writing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.yaml");
+        let backups_dir = tmp.path().join("backups");
+
+        let cases = [
+            ("debug: true\n", "port not found"),
+            ("port: '8317'\n", "numeric `port`"),
+            ("port: 0\n", "not a valid TCP port"),
+            ("port: 70000\n", "not a valid TCP port"),
+        ];
+
+        for (content, expected) in cases {
+            if config_path.exists() {
+                std::fs::remove_file(&config_path).unwrap();
+            }
+            let err = write_config_yaml_with_backup(&config_path, &backups_dir, content)
+                .expect_err("invalid port config must be rejected");
+            assert!(
+                err.contains(expected),
+                "expected {expected:?} in error {err:?}"
+            );
+            assert!(
+                !config_path.exists(),
+                "invalid config must not be written for {content:?}"
+            );
+            assert!(
+                !backups_dir.exists(),
+                "invalid config must not create backups for {content:?}"
+            );
+        }
     }
 
     #[test]

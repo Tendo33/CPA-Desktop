@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { Webview } from '@tauri-apps/api/webview'
 import { getCurrentWindow, LogicalPosition, LogicalSize } from '@tauri-apps/api/window'
 import { buildMgmtAutoLoginScript } from '@/lib/mgmtAutoLogin'
@@ -17,12 +18,17 @@ interface Props {
    * Pass `null` (or omit) to render the panel without auto-login.
    */
   autoLogin?: { apiBase: string; secretKey: string } | null
+  onAutoLoginError?: (message: string) => void
 }
 
 const LABEL = 'cpa-content'
 const SIDEBAR_W = 56
 const STATUS_H = 28
 type NativeWindow = ReturnType<typeof getCurrentWindow>
+type AutoLoginStatusPayload = {
+  status?: 'pending' | 'ok' | 'error'
+  message?: string
+}
 
 function getNativeWindow(): NativeWindow | null {
   try {
@@ -73,48 +79,80 @@ async function spawnWebview(url: string): Promise<Webview | null> {
 }
 
 export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
-  ({ url, visible, autoLogin }, ref) => {
+  ({ url, visible, autoLogin, onAutoLoginError }, ref) => {
     const wvRef = useRef<Webview | null>(null)
     const tokenRef = useRef(0)
     const visibleRef = useRef(visible)
     visibleRef.current = visible
     const autoLoginRef = useRef(autoLogin)
     autoLoginRef.current = autoLogin
+    const invalidateSpawnToken = useCallback(() => {
+      tokenRef.current += 1
+    }, [])
 
-    const spawn = (u: string) => {
-      const token = ++tokenRef.current
-      spawnWebview(u)
-        .then((wv) => {
-          if (!wv) return
-          if (tokenRef.current !== token) {
-            wv.close()
-            return
-          }
-          wvRef.current = wv
-          if (visibleRef.current) {
-            wv.show()
-            wv.setFocus().catch(() => {})
+    const spawn = useCallback(
+      (u: string) => {
+        const token = ++tokenRef.current
+        spawnWebview(u)
+          .then((wv) => {
+            if (!wv) return
+            if (tokenRef.current !== token) {
+              wv.close()
+              return
+            }
+            wvRef.current = wv
+            if (visibleRef.current) {
+              wv.show()
+              wv.setFocus().catch(() => {})
+            } else {
+              wv.hide()
+            }
+            // Inject auto-login a beat after the page boots so the script
+            // runs against the management origin's localStorage. The script
+            // is idempotent and self-reloads only on first run.
+            const al = autoLoginRef.current
+            if (al?.secretKey) {
+              const script = buildMgmtAutoLoginScript(al)
+              setTimeout(() => {
+                if (tokenRef.current !== token) return
+                evalInWebview(LABEL, script).catch((e) => {
+                  console.warn('[CpaWebView] auto-login eval failed', e)
+                  onAutoLoginError?.(e instanceof Error ? e.message : String(e))
+                })
+              }, 350)
+            }
+          })
+          .catch(console.error)
+      },
+      [onAutoLoginError],
+    )
+
+    useImperativeHandle(ref, () => ({ reload: () => spawn(url) }), [spawn, url])
+
+    useEffect(() => {
+      if (!onAutoLoginError) return
+      let disposed = false
+      let unlisten: (() => void) | null = null
+
+      void listen<AutoLoginStatusPayload>('cpa:auto-login-status', ({ payload }) => {
+        if (payload?.status === 'error') {
+          onAutoLoginError(payload.message || 'Auto-login failed')
+        }
+      })
+        .then((fn) => {
+          if (disposed) {
+            fn()
           } else {
-            wv.hide()
-          }
-          // Inject auto-login a beat after the page boots so the script
-          // runs against the management origin's localStorage. The script
-          // is idempotent and self-reloads only on first run.
-          const al = autoLoginRef.current
-          if (al?.secretKey) {
-            const script = buildMgmtAutoLoginScript(al)
-            setTimeout(() => {
-              if (tokenRef.current !== token) return
-              evalInWebview(LABEL, script).catch((e) =>
-                console.warn('[CpaWebView] auto-login eval failed', e),
-              )
-            }, 350)
+            unlisten = fn
           }
         })
-        .catch(console.error)
-    }
+        .catch((e) => console.warn('[CpaWebView] auto-login status listener failed', e))
 
-    useImperativeHandle(ref, () => ({ reload: () => spawn(url) }))
+      return () => {
+        disposed = true
+        unlisten?.()
+      }
+    }, [onAutoLoginError])
 
     useEffect(() => {
       if (!visible) {
@@ -124,12 +162,11 @@ export const CpaWebView = forwardRef<CpaWebViewHandle, Props>(
       const t = setTimeout(() => spawn(url), 150)
       return () => {
         clearTimeout(t)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        tokenRef.current++
+        invalidateSpawnToken()
         wvRef.current?.close()
         wvRef.current = null
       }
-    }, [url, visible])
+    }, [invalidateSpawnToken, spawn, url, visible])
 
     useEffect(() => {
       const win = getNativeWindow()
