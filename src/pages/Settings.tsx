@@ -22,6 +22,7 @@ import { Button, Input, NumberInput, Row, Section, Toggle, Tabs } from '@/compon
 import { ConfigForm } from '@/components/ConfigForm'
 import { InstallSourceCard } from '@/components/InstallSourceCard'
 import { cn } from '@/lib/utils'
+import { useAppSettingsStore } from '@/stores/appSettings'
 import { useSettingsStore } from '@/stores/settings'
 
 const MonacoEditor = lazy(() =>
@@ -30,7 +31,7 @@ const MonacoEditor = lazy(() =>
 
 /* ── Main page ─────────────────────────────────────────────────────────── */
 export function SettingsPage() {
-  const { status, port: livePort, initialized: cpaStoreInitialized } = useCpaStore()
+  const { status } = useCpaStore()
   const t = useT()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [yaml, setYaml] = useState('')
@@ -41,14 +42,23 @@ export function SettingsPage() {
   const [updateMsg, setUpdateMsg] = useState('')
   const [configTab, setConfigTab] = useState<'form' | 'yaml'>('form')
   const [needsRestart, setNeedsRestart] = useState(false)
+  const [restartError, setRestartError] = useState('')
+  const [restarting, setRestarting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const theme = useSettingsStore((s) => s.theme)
+  const setAutoCheckAppUpdates = useAppSettingsStore((s) => s.setAutoCheckAppUpdates)
   // Debounce text/number inputs so we don't atomic_write on every keystroke
   // (each save triggers an fsync; chained writes would visibly stutter).
   // Toggles bypass the debounce because they're discrete and the user
   // expects immediate feedback ("did the toggle take?").
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingSave = useRef<AppSettings | null>(null)
+
+  const syncDisplayedPort = (port: number) => {
+    setYamlPort(port)
+    setSettings((current) => (current && current.port !== port ? { ...current, port } : current))
+    if (pendingSave.current) pendingSave.current = { ...pendingSave.current, port }
+  }
 
   useEffect(() => {
     const onDirty = (e: Event) => {
@@ -60,7 +70,10 @@ export function SettingsPage() {
   }, [])
 
   useEffect(() => {
-    getSettings().then(setSettings)
+    getSettings().then((loaded) => {
+      const cpa = useCpaStore.getState()
+      setSettings(cpa.initialized ? { ...loaded, port: cpa.port } : loaded)
+    })
     readConfigYaml()
       .then(setYaml)
       .catch(() => {})
@@ -72,16 +85,18 @@ export function SettingsPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (!cpaStoreInitialized) return
-    setSettings((current) => {
-      if (!current || current.port === livePort) return current
-      const next = { ...current, port: livePort }
-      if (pendingSave.current) pendingSave.current = { ...pendingSave.current, port: livePort }
-      return next
-    })
-    setYamlPort(livePort)
-  }, [cpaStoreInitialized, livePort, settings?.port])
+  useEffect(
+    () =>
+      useCpaStore.subscribe((state, previous) => {
+        if (!state.initialized || state.port === previous.port) return
+        setYamlPort(state.port)
+        setSettings((current) =>
+          current && current.port !== state.port ? { ...current, port: state.port } : current,
+        )
+        if (pendingSave.current) pendingSave.current = { ...pendingSave.current, port: state.port }
+      }),
+    [],
+  )
 
   const flash = (m: string) => {
     setMsg(m)
@@ -115,10 +130,11 @@ export function SettingsPage() {
     pendingSave.current = null
     try {
       await saveSettings(snapshot)
+      setAutoCheckAppUpdates(Boolean(snapshot.autoCheckAppUpdates))
     } catch (e) {
       flash(String(e))
     }
-  }, [])
+  }, [setAutoCheckAppUpdates])
 
   const updateSetting = (updates: Partial<AppSettings>, opts?: { immediate?: boolean }) => {
     if (!settings) return
@@ -142,13 +158,8 @@ export function SettingsPage() {
 
   const updatePort = (port: number) => {
     if (!settings) return
-    const next = { ...settings, port }
-    setSettings(next)
-    setYamlPort(port)
+    syncDisplayedPort(port)
     setNeedsRestart(true)
-    if (pendingSave.current) {
-      pendingSave.current = { ...pendingSave.current, port }
-    }
     void setCpaPort(port).catch((e) => flash(String(e)))
   }
 
@@ -158,8 +169,7 @@ export function SettingsPage() {
       await writeConfigYaml(yaml)
       const nextPort = await getPortFromYaml().catch(() => null)
       if (typeof nextPort === 'number') {
-        setYamlPort(nextPort)
-        setSettings((current) => (current ? { ...current, port: nextPort } : current))
+        syncDisplayedPort(nextPort)
       }
       setNeedsRestart(true)
       flash(t.settings.configSaved)
@@ -188,9 +198,18 @@ export function SettingsPage() {
   }
 
   const handleRestartCpa = async () => {
-    if (status.kind === 'Running') await stopCpa()
-    setTimeout(() => startCpa(), 500)
-    setNeedsRestart(false)
+    if (restarting) return
+    setRestartError('')
+    setRestarting(true)
+    try {
+      if (status.kind === 'Running') await stopCpa()
+      await startCpa()
+      setNeedsRestart(false)
+    } catch (e) {
+      setRestartError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRestarting(false)
+    }
   }
 
   if (!settings) {
@@ -232,13 +251,25 @@ export function SettingsPage() {
             }}
           >
             <span>{t.settings.restartRequiredBanner}</span>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <Button size="sm" onClick={handleRestartCpa}>
-                {t.settings.restartNow}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setNeedsRestart(false)}>
-                {t.settings.dismiss}
-              </Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {restartError && (
+                <span style={{ color: 'var(--c-err)', fontSize: 12, fontWeight: 600 }}>
+                  {restartError}
+                </span>
+              )}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <Button size="sm" onClick={handleRestartCpa} disabled={restarting}>
+                  {restarting ? t.dashboard.startingCpa : t.settings.restartNow}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={restarting}
+                  onClick={() => setNeedsRestart(false)}
+                >
+                  {t.settings.dismiss}
+                </Button>
+              </div>
             </div>
           </div>
         )}

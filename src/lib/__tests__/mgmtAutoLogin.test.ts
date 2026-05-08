@@ -33,13 +33,13 @@ describe('buildMgmtAutoLoginScript', () => {
     // A secret with a single quote (unlikely but possible).
     const s = buildMgmtAutoLoginScript({
       apiBase: "http://h.example/path'with-quote",
-      secretKey: "key\"with-quote",
+      secretKey: 'key"with-quote',
     })
     // Tries to parse the script as JS — eval is overkill, but we can
     // at least confirm balanced quoting via JSON round-trip on the
     // payload literal.
     expect(() => JSON.parse(JSON.stringify(s))).not.toThrow()
-    expect(s).toContain("h.example")
+    expect(s).toContain('h.example')
   })
 
   it('skips the inject if isLoggedIn and storage are already set', () => {
@@ -53,5 +53,13 @@ describe('buildMgmtAutoLoginScript', () => {
   it('reloads the page to trigger zustand persist hydration', () => {
     const s = buildMgmtAutoLoginScript({ apiBase: 'x', secretKey: 'y' })
     expect(s).toMatch(/location\.reload/)
+  })
+
+  it('records observable success and failure status inside the webview', () => {
+    const s = buildMgmtAutoLoginScript({ apiBase: 'x', secretKey: 'y' })
+    expect(s).toContain('__CPA_DESKTOP_AUTO_LOGIN_STATUS__')
+    expect(s).toContain("report('ok','')")
+    expect(s).toContain("report('error'")
+    expect(s).toContain("tauri.emit('cpa:auto-login-status',payload)")
   })
 })

@@ -18,10 +18,7 @@
  * After writing storage, the script reloads the page so zustand's persist
  * middleware picks up the new state on the second boot.
  */
-export function buildMgmtAutoLoginScript(opts: {
-  apiBase: string
-  secretKey: string
-}): string {
+export function buildMgmtAutoLoginScript(opts: { apiBase: string; secretKey: string }): string {
   const payload = JSON.stringify({
     state: {
       apiBase: opts.apiBase,
@@ -37,7 +34,17 @@ export function buildMgmtAutoLoginScript(opts: {
   const payloadLit = JSON.stringify(payload)
 
   // Single-statement IIFE — easier to log if it throws inside the webview.
-  return `(function(){try{
+  return `(function(){
+  function report(status,message){
+    var payload={status:status,message:message||''};
+    window.__CPA_DESKTOP_AUTO_LOGIN_STATUS__=payload;
+    try{
+      var tauri=window.__TAURI__&&window.__TAURI__.event;
+      if(tauri&&typeof tauri.emit==='function'){tauri.emit('cpa:auto-login-status',payload);}
+    }catch(_){}
+  }
+  try{
+    report('pending','');
     var SECRET_SALT='cli-proxy-api-webui::secure-storage';
     var ENC_PREFIX='enc::v1::';
     var STORAGE_KEY='cli-proxy-auth';
@@ -46,7 +53,7 @@ export function buildMgmtAutoLoginScript(opts: {
       var existing=localStorage.getItem(STORAGE_KEY);
       if(existing && existing.indexOf(ENC_PREFIX)===0){alreadySet=true;}
     }catch(_){}
-    if(localStorage.getItem('isLoggedIn')==='true' && alreadySet){return;}
+    if(localStorage.getItem('isLoggedIn')==='true' && alreadySet){report('ok','');return;}
     var host=window.location.host;
     var ua=navigator.userAgent;
     var keyStr=SECRET_SALT+'|'+host+'|'+ua;
@@ -59,6 +66,10 @@ export function buildMgmtAutoLoginScript(opts: {
     for(var j=0;j<out.length;j++){bin+=String.fromCharCode(out[j]);}
     localStorage.setItem(STORAGE_KEY, ENC_PREFIX+btoa(bin));
     localStorage.setItem('isLoggedIn','true');
+    report('ok','');
     setTimeout(function(){location.reload();},40);
-  }catch(e){console.error('[CPA Desktop] auto-login inject failed:',e);}})();`
+  }catch(e){
+    report('error',String(e&&e.message?e.message:e));
+    console.error('[CPA Desktop] auto-login inject failed:',e);
+  }})();`
 }

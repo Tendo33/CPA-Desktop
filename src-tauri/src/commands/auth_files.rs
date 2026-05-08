@@ -1175,6 +1175,63 @@ mod tests {
     }
 
     #[test]
+    fn transform_accepts_nested_realistic_codex_fixture() {
+        let access = make_jwt(serde_json::json!({
+            "exp": 1_760_000_000,
+            "client_id": "client-fixture",
+            "https://api.openai.com/auth": {
+                "chatgpt_account_id": "acct-fixture",
+                "chatgpt_user_id": "user-fixture",
+                "chatgpt_plan_type": "team",
+                "organization_id": "org-fixture"
+            },
+            "https://api.openai.com/profile": { "email": "fixture@example.test" }
+        }));
+        let id_tok = make_jwt(serde_json::json!({
+            "email": "fixture@example.test",
+            "https://api.openai.com/auth": {
+                "chatgpt_account_id": "acct-fixture",
+                "organizations": [{ "id": "org-fixture", "is_default": true }]
+            }
+        }));
+        let source = serde_json::json!({
+            "credentials": {
+                "accessToken": access,
+                "refreshToken": "refresh-fixture",
+                "idToken": id_tok
+            }
+        });
+
+        let out =
+            transform_to_sub2api(&source, "fixture-account.json", "2026-05-07T00:00:00Z").unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let acct = &v["accounts"][0];
+
+        assert_eq!(acct["name"], "fixture-account");
+        assert_eq!(acct["credentials"]["chatgpt_account_id"], "acct-fixture");
+        assert_eq!(acct["credentials"]["organization_id"], "org-fixture");
+        assert_eq!(acct["credentials"]["plan_type"], "team");
+    }
+
+    #[test]
+    fn transform_rejects_unknown_auth_file_schema_with_readable_reason() {
+        let err = transform_to_sub2api(
+            &serde_json::json!({
+                "provider": "unknown",
+                "credentials": { "session": "opaque" }
+            }),
+            "unknown.json",
+            "2026-05-07T00:00:00Z",
+        )
+        .unwrap_err();
+
+        assert!(
+            err.contains("missing access_token"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn build_zip_round_trips() {
         let entries = vec![
             ("a.json".to_string(), b"{\"hello\":1}".to_vec()),
