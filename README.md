@@ -120,6 +120,9 @@ GitHub secrets required to enable it.
 - [Rust](https://rustup.rs/) stable
 - Tauri system dependencies — see [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 
+AI assistant project rules live in `.trellis/spec/README.md`, with shared
+entrypoints in `AGENTS.md` and `CLAUDE.md`.
+
 ### Getting started
 
 ```bash
