@@ -10,26 +10,26 @@ CPA Desktop is a cross-platform desktop app (Tauri v2 + Rust + React) that manag
 
 ```bash
 # Dev
-npm install
-npm run tauri dev        # full app (Rust + frontend hot reload)
-npm run dev              # frontend only (no Tauri IPC)
+pnpm install
+pnpm run tauri dev       # full app (Rust + frontend hot reload)
+pnpm run dev             # frontend only (no Tauri IPC)
 
 # Build
-npm run tauri build      # produces installers in src-tauri/target/release/bundle/
+pnpm run tauri build     # produces installers in src-tauri/target/release/bundle/
 
 # Lint / format
-npm run lint             # ESLint
-npm run lint:fix
-npm run format           # Prettier
-npm run typecheck        # tsc --noEmit
+pnpm run lint            # ESLint
+pnpm run lint:fix
+pnpm run format          # Prettier
+pnpm run typecheck       # tsc --noEmit
 
 # Tests — frontend (vitest/jsdom)
-npm run test             # watch mode
-npm run test:run         # one-shot (CI)
-npm run test:coverage
+pnpm run test            # watch mode
+pnpm run test:run        # one-shot (CI)
+pnpm run test:coverage
 
 # Run a single frontend test file
-npx vitest run src/components/__tests__/statusbar.helpers.test.ts
+pnpm exec vitest run src/components/__tests__/statusbar.helpers.test.ts
 
 # Tests — Rust (inside src-tauri/)
 cargo test               # all

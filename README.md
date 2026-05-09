@@ -123,14 +123,14 @@ GitHub secrets required to enable it.
 ### Getting started
 
 ```bash
-npm install
-npm run tauri dev
+pnpm install
+pnpm run tauri dev
 ```
 
 ### Build
 
 ```bash
-npm run tauri build
+pnpm run tauri build
 ```
 
 Produces platform-native installers in `src-tauri/target/release/bundle/`.
