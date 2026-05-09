@@ -78,8 +78,8 @@ CPA at runtime.
 
 | Platform | Status                  | What you'll see on first launch                              |
 | -------- | ----------------------- | ------------------------------------------------------------ |
-| macOS    | Unsigned (TODO: notarize) | Gatekeeper warning. See the macOS notes below.               |
-| Windows  | Unsigned (TODO: code-sign) | SmartScreen prompt → _More info_ → _Run anyway_              |
+| macOS    | Unsigned; not notarized yet | Gatekeeper warning. See the macOS notes below.               |
+| Windows  | Unsigned; not code-signed yet | SmartScreen prompt → _More info_ → _Run anyway_              |
 | Linux    | N/A                     | No equivalent to Gatekeeper; AppImage / `.deb` work as-is.   |
 
 ### macOS: clear the quarantine flag
