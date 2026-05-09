@@ -183,7 +183,8 @@ pub fn check_process_alive(state: &SharedCpaState) -> bool {
     if let Some(child) = s.process.as_mut() {
         match child.try_wait() {
             Ok(None) => true,
-            _ => {
+            Ok(Some(_)) | Err(_) => {
+                s.process = None;
                 s.status = CpaStatus::Stopped;
                 false
             }

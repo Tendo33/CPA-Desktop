@@ -2,6 +2,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use tauri::{AppHandle, Manager};
 
+const ALLOWED_EVAL_WEBVIEW_LABEL: &str = "cpa-content";
+
 #[tauri::command]
 pub fn report_frontend_error(
     app: AppHandle,
@@ -12,6 +14,8 @@ pub fn report_frontend_error(
     std::fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
     let path = logs.join("frontend-errors.log");
     let now = chrono::Local::now().to_rfc3339();
+    let message = crate::log_stream::redact(&message);
+    let stack = stack.map(|s| crate::log_stream::redact(&s));
     let mut f = OpenOptions::new()
         .create(true)
         .append(true)
@@ -85,6 +89,9 @@ pub async fn probe_management_api(app: AppHandle) -> Result<String, String> {
 /// auto-login as best-effort.
 #[tauri::command]
 pub fn eval_in_webview(app: AppHandle, label: String, script: String) -> Result<(), String> {
+    if label != ALLOWED_EVAL_WEBVIEW_LABEL {
+        return Err(format!("webview '{label}' is not allowed for eval"));
+    }
     let Some(wv) = app.get_webview(&label) else {
         return Err(format!("webview '{label}' not found"));
     };
@@ -97,4 +104,14 @@ pub fn open_logs_folder(app: AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ALLOWED_EVAL_WEBVIEW_LABEL;
+
+    #[test]
+    fn eval_webview_label_is_narrowed_to_dashboard_content() {
+        assert_eq!(ALLOWED_EVAL_WEBVIEW_LABEL, "cpa-content");
+    }
 }
